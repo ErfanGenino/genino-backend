@@ -1,0 +1,6 @@
+node_modules/
+prisma/.env
+.env
+npm-debug.log
+dist/
+coverage/
