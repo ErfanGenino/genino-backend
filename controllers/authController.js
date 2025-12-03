@@ -17,44 +17,101 @@ function generateToken(user) {
   );
 }
 
-// 📌 POST /api/auth/register
+// 📌 POST /api/auth/register — نسخه کامل ژنینو
 exports.register = async (req, res, prisma) => {
   try {
-    const { email, password, fullName } = req.body;
+    const {
+      firstName,
+      lastName,
+      gender,
+      birthDate,     // فعلاً string ذخیره می‌کنیم (گزینه C)
+      province,
+      city,
+      phone,
+      email,
+      username,
+      nationalCode,
+      password,
+    } = req.body;
 
-    if (!email || !password) {
+    // 🔸 اعتبارسنجی اولیه
+    if (!email || !password || !firstName || !lastName) {
       return res.status(400).json({
         ok: false,
-        message: "ایمیل و پسورد الزامی است.",
+        message: "فیلدهای نام، نام خانوادگی، ایمیل و رمز عبور الزامی هستند.",
       });
     }
 
-    // چک وجود کاربر
-    const existing = await prisma.user.findUnique({
-      where: { email },
-    });
-
-    if (existing) {
+    // 🔸 چک تکراری بودن ایمیل
+    const emailExists = await prisma.user.findUnique({ where: { email } });
+    if (emailExists) {
       return res.status(409).json({
         ok: false,
         message: "این ایمیل قبلاً در ژنینو ثبت شده است.",
       });
     }
 
-    // هش کردن پسورد
+    // 🔸 چک تکراری بودن شماره موبایل
+    if (phone) {
+      const phoneExists = await prisma.user.findUnique({ where: { phone } });
+      if (phoneExists) {
+        return res.status(409).json({
+          ok: false,
+          message: "این شماره موبایل قبلاً ثبت شده است.",
+        });
+      }
+    }
+
+    // 🔸 چک تکراری بودن نام کاربری
+    if (username) {
+      const userExists = await prisma.user.findUnique({ where: { username } });
+      if (userExists) {
+        return res.status(409).json({
+          ok: false,
+          message: "این نام کاربری قبلاً ثبت شده است.",
+        });
+      }
+    }
+
+    // 🔸 چک تکراری بودن کد ملی
+    if (nationalCode) {
+      const ncExists = await prisma.user.findUnique({ where: { nationalCode } });
+      if (ncExists) {
+        return res.status(409).json({
+          ok: false,
+          message: "این کد ملی قبلاً ثبت شده است.",
+        });
+      }
+    }
+
+    // 🔸 ساخت fullName
+    const fullName = `${firstName} ${lastName}`;
+
+    // 🔸 هش کردن رمز عبور
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // ساخت کاربر
+    // 🔸 ساخت کاربر در Prisma
     const user = await prisma.user.create({
       data: {
+        firstName,
+        lastName,
+        fullName,
+        gender,
+        birthDate,   // فعلاً string طبق گزینه C
+        province,
+        city,
+        phone,
         email,
+        username,
+        nationalCode,
         password: hashedPassword,
-        fullName: fullName || null,
       },
     });
 
+    // 🔸 ساخت توکن
     const token = generateToken(user);
 
+    // 🔸 خروجی نهایی
     return res.status(201).json({
       ok: true,
       message: "ثبت‌نام در ژنینو با موفقیت انجام شد.",
@@ -63,6 +120,13 @@ exports.register = async (req, res, prisma) => {
         id: user.id,
         email: user.email,
         fullName: user.fullName,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        username: user.username,
+        phone: user.phone,
+        gender: user.gender,
+        province: user.province,
+        city: user.city,
         createdAt: user.createdAt,
       },
     });
@@ -74,6 +138,7 @@ exports.register = async (req, res, prisma) => {
     });
   }
 };
+
 
 // 📌 POST /api/auth/login
 exports.login = async (req, res, prisma) => {

@@ -12,17 +12,37 @@ datasource db {
 
 // مدل کاربر (والدین ژنینو)
 model User {
-  id           Int       @id @default(autoincrement())
-  email        String    @unique
-  password     String
-  fullName     String?
-  nationalCode   String?   @unique 
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id            Int       @id @default(autoincrement())
+  
+  // اطلاعات هویتی
+  firstName     String
+  lastName      String
+  fullName      String?        // در صورت نیاز
+  username      String?  @unique
+  nationalCode  String?  @unique
+  
+  // اطلاعات تماس
+  email         String   @unique
+  phone         String?  @unique
 
-  children     Child[]
-  savedArticles SavedArticle[]  // 👈 این خط جدید
+  // اطلاعات ثبت‌نام و ورود
+  password      String
+  
+  // اطلاعات پروفایل
+  gender        String?        // male | female
+  birthDate     DateTime?
+  province      String?
+  city          String?
+  
+  // زمان‌ها
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // روابط
+  children      Child[]
+  savedArticles SavedArticle[]
 }
+
 
 // مدل کودک
 model Child {
