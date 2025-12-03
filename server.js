@@ -4,6 +4,7 @@ const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const { PrismaClient } = require("@prisma/client");
+const authMiddleware = require("./middleware/authMiddleware");
 
 // env را از prisma/.env لود می‌کنیم
 dotenv.config({ path: "prisma/.env" });
@@ -29,7 +30,16 @@ app.get("/api/health", (req, res) => {
 const authRoutes = require("./routes/auth");
 app.use("/api/auth", authRoutes(prisma));
 
-// استارت سرور
+// 🔹 Protected Test Route (اینجا باید باشد ❗)
+app.get("/api/protected", authMiddleware, (req, res) => {
+  res.json({
+    ok: true,
+    message: "این مسیر فقط با JWT قابل دسترسی است.",
+    user: req.user,
+  });
+});
+
+// استارت سرور (همیشه آخر)
 app.listen(PORT, () => {
   console.log(`🚀 Genino backend running on port ${PORT}`);
 });
