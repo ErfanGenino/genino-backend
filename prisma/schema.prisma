@@ -5,97 +5,94 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider          = "postgresql"
+  url               = env("DATABASE_URL")
+  directUrl         = env("DIRECT_URL")
 }
-
 
 // مدل کاربر (والدین ژنینو)
 model User {
   id            Int       @id @default(autoincrement())
-  
+
   // اطلاعات هویتی
   firstName     String
   lastName      String
-  fullName      String?        // در صورت نیاز
+  fullName      String?
   username      String?  @unique
   nationalCode  String?  @unique
-  
+
   // اطلاعات تماس
   email         String   @unique
   phone         String?  @unique
 
   // اطلاعات ثبت‌نام و ورود
   password      String
-  
+
   // اطلاعات پروفایل
-  gender        String?        // male | female
+  gender        String?
   birthDate     DateTime?
   province      String?
   city          String?
-  
-  // زمان‌ها
+
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  // روابط
   children      Child[]
   savedArticles SavedArticle[]
 }
-
 
 // مدل کودک
 model Child {
   id          Int        @id @default(autoincrement())
   userId      Int
   fullName    String?
-  gender      String?    // male | female
+  gender      String?
   birthDate   DateTime?
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
-  // رابطه‌ها
   user        User       @relation(fields: [userId], references: [id])
   growth      GrowthMetric[]
   testResults TestResult[]
 }
+
 // مدل اندازه‌گیری رشد کودک
 model GrowthMetric {
   id          Int        @id @default(autoincrement())
   childId     Int
-  height      Float?     // قد (سانتیمتر)
-  weight      Float?     // وزن (کیلوگرم)
-  headCircumference Float? // دور سر (سانتیمتر)
+  height      Float?
+  weight      Float?
+  headCircumference Float?
   measuredAt  DateTime   @default(now())
 
-  // رابطه‌ها
   child       Child      @relation(fields: [childId], references: [id])
 }
-// مدل تست‌ها (لیست تست‌های ژنینو)
+
+// مدل تست‌ها
 model Test {
   id          Int        @id @default(autoincrement())
   title       String
   description String?
-  category    String?     // growth | health | awareness | behavior
+  category    String?
   createdAt   DateTime    @default(now())
 
-  // رابطه‌ها
-  results TestResult[]
+  results     TestResult[]
 }
-// نتایج تست‌ها برای هر کودک
+
+// نتایج تست‌ها
 model TestResult {
   id          Int        @id @default(autoincrement())
   testId      Int
   childId     Int
-  resultValue String?     // مقدار نتیجه، متن یا عدد
-  score       Int?        // امتیاز تست (در صورت وجود)
-  createdAt   DateTime    @default(now())
+  resultValue String?
+  score       Int?
+  createdAt   DateTime   @default(now())
 
-  // رابطه‌ها
   test        Test        @relation(fields: [testId], references: [id])
   child       Child       @relation(fields: [childId], references: [id])
 }
-// مدل مقالات ژنینو
+
+// مقالات ژنینو
 model Article {
   id          Int        @id @default(autoincrement())
   title       String
@@ -105,17 +102,16 @@ model Article {
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
-  savedBy     SavedArticle[]   // 👈 این خط جدید
+  savedBy     SavedArticle[]
 }
 
-// مقالات ذخیره‌شده توسط هر کاربر
+// مقالات ذخیره‌شده توسط کاربران
 model SavedArticle {
   id         Int      @id @default(autoincrement())
   userId     Int
   articleId  Int
   savedAt    DateTime @default(now())
 
-  // رابطه‌ها
   user       User     @relation(fields: [userId], references: [id])
   article    Article  @relation(fields: [articleId], references: [id])
 }
