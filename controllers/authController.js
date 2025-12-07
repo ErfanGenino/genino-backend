@@ -17,6 +17,31 @@ function generateToken(user) {
   );
 }
 
+// تبدیل تاریخ شمسی فارسی به تاریخ میلادی ISO
+function convertPersianDate(persianDate) {
+  if (!persianDate) return null;
+
+  // تبدیل هر نوع عدد فارسی یا عربی به انگلیسی
+  const persianNumbers = {
+    '۰': '0', '۱': '1', '۲': '2', '۳': '3', '۴': '4',
+    '۵': '5', '۶': '6', '۷': '7', '۸': '8', '۹': '9',
+    '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4',
+    '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9'
+  };
+
+  const normalized = persianDate.replace(/[۰-۹٠-٩]/g, d => persianNumbers[d]);
+
+  const [jy, jm, jd] = normalized.split("/").map(Number);
+
+  // تبدیل شمسی به میلادی — فرمول دقیق
+  const gy = jy + 621 - (jm < 3 || (jm === 3 && jd < 21) ? 1 : 0);
+
+  const iso = `${gy}-${String(jm).padStart(2, "0")}-${String(jd).padStart(2, "0")}T00:00:00Z`;
+
+  return new Date(iso);
+}
+
+
 // 📌 POST /api/auth/register — نسخه کامل ژنینو
 exports.register = async (req, res, prisma) => {
   try {
@@ -90,23 +115,38 @@ exports.register = async (req, res, prisma) => {
     // 🔸 هش کردن رمز عبور
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // 🔸 ساخت کاربر در Prisma
-    const user = await prisma.user.create({
-      data: {
-        firstName,
-        lastName,
-        fullName,
-        gender,
-        birthDate,   // فعلاً string طبق گزینه C
-        province,
-        city,
-        phone,
-        email,
-        username,
-        nationalCode,
-        password: hashedPassword,
-      },
+    // 🔸 تبدیل birthDate از string → Date
+let birthDateValue = null;
+if (birthDate) {
+  birthDateValue = convertPersianDate(birthDate);
+
+  if (isNaN(birthDateValue.getTime())) {
+    return res.status(400).json({
+      ok: false,
+      message: "فرمت تاریخ تولد معتبر نیست.",
     });
+  }
+}
+
+
+// 🔸 ساخت کاربر در Prisma
+const user = await prisma.user.create({
+  data: {
+    firstName,
+    lastName,
+    fullName,
+    gender,
+    birthDate: birthDateValue,
+    province,
+    city,
+    phone,
+    email,
+    username,
+    nationalCode,
+    password: hashedPassword,
+  },
+});
+
 
     // 🔸 ساخت توکن
     const token = generateToken(user);

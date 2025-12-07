@@ -6,20 +6,30 @@ const dotenv = require("dotenv");
 const { PrismaClient } = require("@prisma/client");
 const authMiddleware = require("./middleware/authMiddleware");
 
-// env را از prisma/.env لود می‌کنیم
 dotenv.config({ path: "prisma/.env" });
 
 const app = express();
 const prisma = new PrismaClient();
 
-const PORT = 80;
+const PORT = process.env.PORT || 80;
+
+// --- CORS ---
+app.use(cors({
+  origin: [
+    "http://localhost:5173",
+    "https://genino-web.vercel.app",
+    "https://genino.ir",
+    "https://genino-backend-app-409014d5ff-genino-registry.apps.ir-central1.arvancaas.ir"
+  ],
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+}));
 
 
-// میدل‌ورها
-app.use(cors());
+// Body parser
 app.use(express.json());
 
-// 🔹 Health Check
+// --- Health Check ---
 app.get("/api/health", (req, res) => {
   res.json({
     status: "ok",
@@ -27,11 +37,11 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-// 🔹 Auth Routes
+// --- Auth Routes ---
 const authRoutes = require("./routes/auth");
 app.use("/api/auth", authRoutes(prisma));
 
-// 🔹 Protected Test Route (اینجا باید باشد ❗)
+// --- Protected Test Route ---
 app.get("/api/protected", authMiddleware, (req, res) => {
   res.json({
     ok: true,
@@ -40,7 +50,7 @@ app.get("/api/protected", authMiddleware, (req, res) => {
   });
 });
 
-// استارت سرور (همیشه آخر)
+// --- Start Server ---
 app.listen(PORT, () => {
   console.log(`🚀 Genino backend running on port ${PORT}`);
 });
