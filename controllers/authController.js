@@ -233,3 +233,45 @@ exports.login = async (req, res, prisma) => {
     });
   }
 };
+
+// 📌 GET /api/auth/profile
+exports.getProfile = async (req, res, prisma) => {
+  try {
+    // userId را از توکن که در authMiddleware ست شده می‌گیریم
+    const userId = req.user.userId;
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        ok: false,
+        message: "کاربر پیدا نشد.",
+      });
+    }
+
+    return res.json({
+      ok: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        fullName: user.fullName,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        gender: user.gender,
+        phone: user.phone,
+        province: user.province,
+        city: user.city,
+        lifeStage: user.lifeStage || "user",
+        createdAt: user.createdAt,
+      },
+    });
+  } catch (err) {
+    console.error("PROFILE ERROR:", err);
+    return res.status(500).json({
+      ok: false,
+      message: "خطای داخلی سرور در دریافت پروفایل.",
+    });
+  }
+};

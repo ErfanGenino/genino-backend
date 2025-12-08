@@ -1,7 +1,8 @@
 // routes/auth.js
 
 const express = require("express");
-const { register, login } = require("../controllers/authController");
+const { register, login, getProfile } = require("../controllers/authController");
+const authMiddleware = require("../middleware/authMiddleware");
 
 module.exports = function (prisma) {
   const router = express.Router();
@@ -11,6 +12,9 @@ module.exports = function (prisma) {
 
   // لاگین
   router.post("/login", (req, res) => login(req, res, prisma));
+
+  // دریافت پروفایل کاربر (نیازمند توکن)
+  router.get("/profile", authMiddleware, (req, res) => getProfile(req, res, prisma));
 
   return router;
 };
