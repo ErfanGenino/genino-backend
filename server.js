@@ -17,9 +17,10 @@ const PORT = process.env.PORT || 80;
 app.use(cors({
   origin: [
     "http://localhost:5173",
-    "https://genino-web.vercel.app",
+    "https://genino-web.vercel.app",   // ← دامنه واقعی فرانت تو
+    "https://genino.vercel.app",       // ← اگر این یکی را هم داری
     "https://genino.ir",
-    "https://genino-backend-app-409014d5ff-genino-registry.apps.ir-central1.arvancaas.ir"
+    "https://www.genino.ir",
   ],
   methods: ["GET", "POST", "PUT", "DELETE"],
   allowedHeaders: ["Content-Type", "Authorization"],
