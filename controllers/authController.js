@@ -117,20 +117,48 @@ exports.register = async (req, res, prisma) => {
 // 📌 LOGIN
 exports.login = async (req, res, prisma) => {
   try {
-    const { email, password } = req.body;
+    const { identifier, password } = req.body;
 
-    if (!email || !password) {
-      return res.status(400).json({ ok:false, message:"ایمیل و پسورد الزامی است." });
+    if (!identifier || !password) {
+      return res.status(400).json({
+        ok: false,
+        message: "نام کاربری، ایمیل یا موبایل و رمز عبور الزامی است.",
+      });
     }
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    let user = null;
+
+    // تشخیص نوع identifier
+    if (identifier.includes("@")) {
+      // ایمیل
+      user = await prisma.user.findUnique({
+        where: { email: identifier },
+      });
+    } else if (/^\d{10,15}$/.test(identifier)) {
+      // موبایل (عدد ۱۰ تا ۱۵ رقمی)
+      user = await prisma.user.findUnique({
+        where: { phone: identifier },
+      });
+    } else {
+      // username
+      user = await prisma.user.findUnique({
+        where: { username: identifier },
+      });
+    }
+
     if (!user) {
-      return res.status(401).json({ ok:false, message:"ایمیل یا پسورد اشتباه است." });
+      return res.status(401).json({
+        ok: false,
+        message: "اطلاعات ورود نادرست است.",
+      });
     }
 
     const isValid = await bcrypt.compare(password, user.password);
     if (!isValid) {
-      return res.status(401).json({ ok:false, message:"ایمیل یا پسورد اشتباه است." });
+      return res.status(401).json({
+        ok: false,
+        message: "اطلاعات ورود نادرست است.",
+      });
     }
 
     const token = generateToken(user);
@@ -149,9 +177,13 @@ exports.login = async (req, res, prisma) => {
 
   } catch (err) {
     console.error("Login error:", err);
-    return res.status(500).json({ ok:false, message:"خطای داخلی سرور." });
+    return res.status(500).json({
+      ok: false,
+      message: "خطای داخلی سرور.",
+    });
   }
 };
+
 
 // 📌 GET PROFILE
 exports.getProfile = async (req, res, prisma) => {
