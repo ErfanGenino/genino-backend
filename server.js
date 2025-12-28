@@ -41,6 +41,8 @@ app.get("/api/health", (req, res) => {
 // --- Auth Routes ---
 const authRoutes = require("./routes/auth");
 app.use("/api/auth", authRoutes(prisma));
+const childrenRoutes = require("./routes/children");
+app.use("/api/children", childrenRoutes(prisma));
 
 // --- Protected Test Route ---
 app.get("/api/protected", authMiddleware, (req, res) => {
