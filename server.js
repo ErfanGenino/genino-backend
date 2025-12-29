@@ -17,14 +17,15 @@ const PORT = process.env.PORT || 80;
 app.use(cors({
   origin: [
     "http://localhost:5173",
-    "https://genino-web.vercel.app",   // ← دامنه واقعی فرانت تو
-    "https://genino.vercel.app",       // ← اگر این یکی را هم داری
+    "https://genino-web.vercel.app",
+    "https://genino.vercel.app",
     "https://genino.ir",
     "https://www.genino.ir",
   ],
-  methods: ["GET", "POST", "PUT", "DELETE"],
-  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true,
 }));
+
+
 
 
 // Body parser

@@ -23,6 +23,9 @@ module.exports = function (prisma) {
 
   // POST /api/children
   router.post("/", authMiddleware, async (req, res) => {
+    console.log("🔥 POST /api/children HIT");
+  console.log("Headers:", req.headers);
+  console.log("Body:", req.body);
     try {
       const userId = req.user.userId;
       const { fullName, gender, birthDate } = req.body;
