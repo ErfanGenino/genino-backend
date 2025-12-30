@@ -1,4 +1,5 @@
 // server.js — Genino Backend Entry
+// server.js — Genino Backend Entry
 
 const express = require("express");
 const cors = require("cors");
@@ -13,20 +14,34 @@ const prisma = new PrismaClient();
 
 const PORT = process.env.PORT || 80;
 
+app.post("/api/children", (req, res) => {
+  res.json({ ok: true, message: "DIRECT CHILD POST WORKS" });
+});
+
+
 // --- CORS ---
-app.use(cors({
-  origin: [
-    "http://localhost:5173",
-    "https://genino-web.vercel.app",
-    "https://genino.vercel.app",
-    "https://genino.ir",
-    "https://www.genino.ir",
-  ],
-  credentials: true,
-}));
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://genino-web.vercel.app",
+  "https://genino.vercel.app",
+  "https://genino.ir",
+  "https://www.genino.ir",
+];
 
+// اگر Origin خالی بود (مثلاً بعضی تست‌ها/سرورها) اجازه بده
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+      return callback(new Error("Not allowed by CORS"));
+    },
+    credentials: true,
+  })
+);
 
-
+// ✅ پاسخ به preflight های OPTIONS (خیلی مهم برای POST/PUT/DELETE)
+app.options("*", cors());
 
 // Body parser
 app.use(express.json());
@@ -39,9 +54,21 @@ app.get("/api/health", (req, res) => {
   });
 });
 
+// --- API TEST ---
+// ✅ هم با مرورگر (GET) تست میشه هم با fetch/postman (POST)
+app.get("/api/test", (req, res) => {
+  res.json({ ok: true, method: "GET", message: "API TEST OK" });
+});
+
+app.post("/api/test", (req, res) => {
+  res.json({ ok: true, method: "POST", message: "API TEST OK" });
+});
+
 // --- Auth Routes ---
 const authRoutes = require("./routes/auth");
 app.use("/api/auth", authRoutes(prisma));
+
+// --- Children Routes ---
 const childrenRoutes = require("./routes/children");
 app.use("/api/children", childrenRoutes(prisma));
 
@@ -58,3 +85,4 @@ app.get("/api/protected", authMiddleware, (req, res) => {
 app.listen(PORT, () => {
   console.log(`🚀 Genino backend running on port ${PORT}`);
 });
+

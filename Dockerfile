@@ -26,7 +26,7 @@ COPY . .
 # -----------------------
 # 6) Expose backend port
 # -----------------------
-EXPOSE 4000
+EXPOSE 80
 
 # -----------------------
 # 7) Start the backend
