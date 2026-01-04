@@ -69,6 +69,11 @@ app.use("/api/auth", authRoutes(prisma));
 const childrenRoutes = require("./routes/children");
 app.use("/api/children", childrenRoutes(prisma));
 
+// --- Invitations Routes ---
+const invitationsRoutes = require("./routes/invitations");
+app.use("/api/invitations", invitationsRoutes(prisma));
+
+
 // --- Protected Test Route ---
 app.get("/api/protected", authMiddleware, (req, res) => {
   res.json({
