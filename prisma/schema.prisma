@@ -6,116 +6,158 @@ generator client {
 }
 
 datasource db {
-  provider          = "postgresql"
-  url               = env("DATABASE_URL")
-  directUrl         = env("DIRECT_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // مدل کاربر (والدین ژنینو)
 model User {
-  id            Int       @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
   // اطلاعات هویتی
-  firstName     String
-  lastName      String
-  fullName      String?
-  username      String?  @unique
-  nationalCode  String?  @unique
+  firstName    String
+  lastName     String
+  fullName     String?
+  username     String? @unique
+  nationalCode String? @unique
 
   // اطلاعات تماس
-  email         String   @unique
-  phone         String?  @unique
+  email String  @unique
+  phone String? @unique
 
   // اطلاعات ثبت‌نام و ورود
-  password      String
+  password String
 
   // اطلاعات پروفایل
-  gender        String?
-  birthDate     DateTime?
-  province      String?
-  city          String?
+  gender    String?
+  birthDate DateTime?
+  province  String?
+  city      String?
 
   // ⭐⭐ فیلد جدید — مرحله زندگی کاربر
   lifeStage String? @default("user")
 
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   children      Child[]
   savedArticles SavedArticle[]
+
+  childAdmins ChildAdmin[]
+  invitations ChildInvitation[] // (اختیاری: اگر بخوای inviter رو هم ثبت کنیم)
 }
 
 // مدل کودک
 model Child {
-  id          Int        @id @default(autoincrement())
-  userId      Int
-  fullName    String?
-  gender      String?
-  birthDate   DateTime?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  fullName  String?
+  gender    String?
+  birthDate DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
-  user        User       @relation(fields: [userId], references: [id])
+  user        User              @relation(fields: [userId], references: [id])
   growth      GrowthMetric[]
   testResults TestResult[]
+  admins      ChildAdmin[]
+  invitations ChildInvitation[]
 }
 
 // مدل اندازه‌گیری رشد کودک
 model GrowthMetric {
-  id          Int        @id @default(autoincrement())
-  childId     Int
-  height      Float?
-  weight      Float?
+  id                Int      @id @default(autoincrement())
+  childId           Int
+  height            Float?
+  weight            Float?
   headCircumference Float?
-  measuredAt  DateTime   @default(now())
+  measuredAt        DateTime @default(now())
 
-  child       Child      @relation(fields: [childId], references: [id])
+  child Child @relation(fields: [childId], references: [id])
 }
 
 // مدل تست‌ها
 model Test {
-  id          Int        @id @default(autoincrement())
+  id          Int      @id @default(autoincrement())
   title       String
   description String?
   category    String?
-  createdAt   DateTime    @default(now())
+  createdAt   DateTime @default(now())
 
-  results     TestResult[]
+  results TestResult[]
 }
 
 // نتایج تست‌ها
 model TestResult {
-  id          Int        @id @default(autoincrement())
+  id          Int      @id @default(autoincrement())
   testId      Int
   childId     Int
   resultValue String?
   score       Int?
-  createdAt   DateTime   @default(now())
+  createdAt   DateTime @default(now())
 
-  test        Test        @relation(fields: [testId], references: [id])
-  child       Child       @relation(fields: [childId], references: [id])
+  test  Test  @relation(fields: [testId], references: [id])
+  child Child @relation(fields: [childId], references: [id])
 }
 
 // مقالات ژنینو
 model Article {
-  id          Int        @id @default(autoincrement())
-  title       String
-  slug        String     @unique
-  category    String?
-  image       String?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  id        Int      @id @default(autoincrement())
+  title     String
+  slug      String   @unique
+  category  String?
+  image     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  savedBy     SavedArticle[]
+  savedBy SavedArticle[]
 }
 
 // مقالات ذخیره‌شده توسط کاربران
 model SavedArticle {
-  id         Int      @id @default(autoincrement())
-  userId     Int
-  articleId  Int
-  savedAt    DateTime @default(now())
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  articleId Int
+  savedAt   DateTime @default(now())
 
-  user       User     @relation(fields: [userId], references: [id])
-  article    Article  @relation(fields: [articleId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
+  article Article @relation(fields: [articleId], references: [id])
+}
+
+// مدل ادمین کودک
+model ChildAdmin {
+  id        Int      @id @default(autoincrement())
+  childId   Int
+  userId    Int
+  role      String // father | mother | guardian
+  isPrimary Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  child Child @relation(fields: [childId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([childId, userId])
+}
+
+// مدل دعوت از ادمین کودک
+model ChildInvitation {
+  id         Int       @id @default(autoincrement())
+  childId    Int
+  inviterId  Int? // کسی که دعوت رو ارسال کرده (تک‌والد یا والد فعلی)
+  email      String?
+  phone      String?
+  token      String    @unique
+  expiresAt  DateTime
+  accepted   Boolean   @default(false)
+  acceptedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  child   Child @relation(fields: [childId], references: [id], onDelete: Cascade)
+  inviter User? @relation(fields: [inviterId], references: [id], onDelete: SetNull)
+
+  @@index([childId])
+  @@index([inviterId])
+  @@index([email])
+  @@index([phone])
 }

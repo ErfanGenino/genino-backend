@@ -14,9 +14,6 @@ const prisma = new PrismaClient();
 
 const PORT = process.env.PORT || 80;
 
-app.post("/api/children", (req, res) => {
-  res.json({ ok: true, message: "DIRECT CHILD POST WORKS" });
-});
 
 
 // --- CORS ---
