@@ -9,8 +9,7 @@ router.get("/", authMiddleware, async (req, res) => {
   try {
     const userId = req.user.userId;
 
-    // 1️⃣ کودک‌هایی که کاربر ادمین آنهاست (مدل جدید)
-    const adminChildren = await prisma.child.findMany({
+    const children = await prisma.child.findMany({
       where: {
         admins: {
           some: {
@@ -21,23 +20,7 @@ router.get("/", authMiddleware, async (req, res) => {
       orderBy: { createdAt: "asc" },
     });
 
-    // 2️⃣ fallback: کودک‌های قدیمی که هنوز userId دارند
-    const legacyChildren = await prisma.child.findMany({
-      where: {
-        userId,
-        admins: { none: {} },
-      },
-      orderBy: { createdAt: "asc" },
-    });
-
-    // 3️⃣ ترکیب امن (بدون duplicate)
-    const childrenMap = new Map();
-
-    [...adminChildren, ...legacyChildren].forEach((child) => {
-      childrenMap.set(child.id, child);
-    });
-
-    res.json(Array.from(childrenMap.values()));
+    res.json(children);
   } catch (error) {
     console.error("❌ Error fetching children:", error);
     res.status(500).json({ message: "خطا در دریافت کودکان" });
@@ -45,23 +28,23 @@ router.get("/", authMiddleware, async (req, res) => {
 });
 
 
- // POST /api/children
+
+// POST /api/children
 router.post("/", authMiddleware, async (req, res) => {
   try {
     const userId = req.user.userId;
     const { fullName, gender, birthDate } = req.body;
 
-    // 1️⃣ ساخت کودک
+    // 1️⃣ ساخت کودک (بدون userId)
     const child = await prisma.child.create({
       data: {
         fullName,
         gender,
         birthDate: birthDate ? new Date(birthDate) : null,
-        userId, // فعلاً برای سازگاری نگه می‌داریم
       },
     });
 
-    // 2️⃣ تعیین نقش والد بر اساس gender کاربر
+    // 2️⃣ تعیین نقش والد
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: { gender: true },
@@ -71,7 +54,7 @@ router.post("/", authMiddleware, async (req, res) => {
     if (user?.gender === "male") role = "father";
     else if (user?.gender === "female") role = "mother";
 
-    // 3️⃣ ساخت ChildAdmin (ادمین اصلی)
+    // 3️⃣ ساخت ChildAdmin
     await prisma.childAdmin.create({
       data: {
         childId: child.id,
@@ -87,6 +70,7 @@ router.post("/", authMiddleware, async (req, res) => {
     res.status(500).json({ message: "خطا در ثبت کودک" });
   }
 });
+
 
 
   // PUT /api/children/:id

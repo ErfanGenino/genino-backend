@@ -41,7 +41,6 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  children      Child[]
   savedArticles SavedArticle[]
 
   childAdmins ChildAdmin[]
@@ -51,17 +50,15 @@ model User {
 // مدل کودک
 model Child {
   id        Int       @id @default(autoincrement())
-  userId    Int
   fullName  String?
   gender    String?
   birthDate DateTime?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  user        User              @relation(fields: [userId], references: [id])
+  admins      ChildAdmin[]
   growth      GrowthMetric[]
   testResults TestResult[]
-  admins      ChildAdmin[]
   invitations ChildInvitation[]
 }
 
