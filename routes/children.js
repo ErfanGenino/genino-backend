@@ -27,6 +27,63 @@ router.get("/", authMiddleware, async (req, res) => {
   }
 });
 
+// GET /api/children/:id/admins  ✅ (لیست والدین/ادمین‌های کودک)
+router.get("/:id/admins", authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const childId = Number(req.params.id);
+
+    // 1) چک دسترسی: آیا این کاربر ادمین این کودک هست؟
+    const hasAccess = await prisma.childAdmin.findFirst({
+      where: { childId, userId },
+      select: { id: true },
+    });
+
+    if (!hasAccess) {
+      return res.status(403).json({
+        ok: false,
+        message: "شما به این کودک دسترسی ندارید.",
+      });
+    }
+
+    // 2) گرفتن لیست ادمین‌ها + نام کاربر
+    const admins = await prisma.childAdmin.findMany({
+      where: { childId },
+      orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }],
+      select: {
+        userId: true,
+        role: true,
+        isPrimary: true,
+        createdAt: true,
+        user: {
+          select: {
+            fullName: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    // 3) خروجی تمیز برای فرانت
+    const result = admins.map((a) => ({
+      userId: a.userId,
+      role: a.role,
+      isPrimary: a.isPrimary,
+      fullName: a.user?.fullName || null,
+      email: a.user?.email || null,
+      createdAt: a.createdAt,
+    }));
+
+    return res.json({ ok: true, admins: result });
+  } catch (error) {
+    console.error("❌ Error fetching child admins:", error);
+    return res.status(500).json({
+      ok: false,
+      message: "خطا در دریافت والدین کودک",
+    });
+  }
+});
+
 
 
 // POST /api/children
