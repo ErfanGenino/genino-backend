@@ -17,28 +17,35 @@ const PORT = process.env.PORT || 80;
 
 
 // --- CORS ---
+// --- CORS ---
 const allowedOrigins = [
   "http://localhost:5173",
+  "http://127.0.0.1:5173",
   "https://genino-web.vercel.app",
   "https://genino.vercel.app",
   "https://genino.ir",
   "https://www.genino.ir",
 ];
 
-// اگر Origin خالی بود (مثلاً بعضی تست‌ها/سرورها) اجازه بده
-app.use(
-  cors({
-    origin: function (origin, callback) {
-      if (!origin) return callback(null, true);
-      if (allowedOrigins.includes(origin)) return callback(null, true);
-      return callback(new Error("Not allowed by CORS"));
-    },
-    credentials: true,
-  })
-);
+const corsOptions = {
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true);
 
-// ✅ پاسخ به preflight های OPTIONS (خیلی مهم برای POST/PUT/DELETE)
-app.options("*", cors());
+    // برای دیباگ
+    console.log("CORS ORIGIN:", origin);
+
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+
+    // رد کن ولی Error نده تا قاطی نکنه
+    return callback(null, false);
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+};
+
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
 
 // Body parser
 app.use(express.json());
@@ -72,6 +79,10 @@ app.use("/api/children", childrenRoutes(prisma));
 // --- Invitations Routes ---
 const invitationsRoutes = require("./routes/invitations");
 app.use("/api/invitations", invitationsRoutes(prisma));
+
+// --- FamilyTree Routes ---
+const familyTreeRoutes = require("./routes/familyTree");
+app.use("/api/family-tree", familyTreeRoutes(prisma));
 
 
 // --- Protected Test Route ---

@@ -7,58 +7,79 @@ module.exports = function (prisma) {
 
   // ===============================
   // POST /api/invitations (ارسال دعوت)
+  // body: { childId, email?, phone?, relationType, slot?, roleLabel? }
   // ===============================
   router.post("/", authMiddleware, async (req, res) => {
     try {
       const userId = req.user.userId;
-      const { childId, email, phone } = req.body;
+      const { childId, email, phone, relationType, slot, roleLabel } = req.body;
 
-      // 1️⃣ اعتبارسنجی
+      // 1) اعتبارسنجی پایه
       if (!childId) {
-        return res.status(400).json({ message: "childId الزامی است." });
+        return res.status(400).json({ ok: false, message: "childId الزامی است." });
       }
       if (!email && !phone) {
         return res.status(400).json({
+          ok: false,
           message: "ایمیل یا شماره موبایل الزامی است.",
         });
       }
 
-      // 2️⃣ بررسی ادمین بودن کاربر
+      // ✅ NEW: نقش/جایگاه
+      if (!relationType || typeof relationType !== "string") {
+        return res.status(400).json({
+          ok: false,
+          message: "relationType الزامی است.",
+        });
+      }
+
+      const slotValue =
+        slot === undefined || slot === null || slot === ""
+          ? 0
+          : Number(slot);
+
+      if (Number.isNaN(slotValue) || slotValue < 0) {
+        return res.status(400).json({
+          ok: false,
+          message: "slot باید عدد 0 یا بزرگتر باشد.",
+        });
+      }
+
+      // 2) بررسی ادمین بودن کاربر
       const admin = await prisma.childAdmin.findFirst({
         where: { childId: Number(childId), userId },
       });
 
       if (!admin) {
         return res.status(403).json({
+          ok: false,
           message: "شما اجازه ارسال دعوت برای این کودک را ندارید.",
         });
       }
 
-      // 3️⃣ جلوگیری از دعوت فعال تکراری
+      // 3) جلوگیری از دعوت فعال تکراری (برای همان کودک و همان مقصد)
       const existingInvite = await prisma.childInvitation.findFirst({
         where: {
           childId: Number(childId),
           accepted: false,
           expiresAt: { gt: new Date() },
-          OR: [
-            email ? { email } : undefined,
-            phone ? { phone } : undefined,
-          ].filter(Boolean),
+          OR: [email ? { email } : undefined, phone ? { phone } : undefined].filter(Boolean),
         },
       });
 
       if (existingInvite) {
         return res.status(409).json({
-          message: "برای این والد قبلاً دعوت فعال ارسال شده است.",
+          ok: false,
+          message: "برای این شخص قبلاً دعوت فعال ارسال شده است.",
         });
       }
 
-      // 4️⃣ ساخت توکن و تاریخ انقضا
+      // 4) ساخت توکن و تاریخ انقضا
       const token = crypto.randomBytes(32).toString("hex");
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + 7);
 
-      // 5️⃣ ذخیره دعوت
+      // 5) ذخیره دعوت
       const invitation = await prisma.childInvitation.create({
         data: {
           childId: Number(childId),
@@ -67,22 +88,32 @@ module.exports = function (prisma) {
           phone: phone || null,
           token,
           expiresAt,
+
+          // ✅ NEW
+          relationType: relationType.trim(),
+          slot: slotValue,
+          roleLabel: roleLabel ? String(roleLabel).trim() : null,
         },
       });
 
-      res.status(201).json({
+      // ⚠️ در prod بهتره token برنگرده؛ فعلاً برای تست accept، برمی‌گردونیم
+      return res.status(201).json({
         ok: true,
         message: "دعوت‌نامه با موفقیت ایجاد شد.",
         invitationId: invitation.id,
+        token: invitation.token, // ✅ فقط برای تست/دیباگ
+        relationType: invitation.relationType,
+        slot: invitation.slot,
       });
     } catch (error) {
       console.error("❌ Error creating invitation:", error);
-      res.status(500).json({ message: "خطا در ایجاد دعوت‌نامه." });
+      return res.status(500).json({ ok: false, message: "خطا در ایجاد دعوت‌نامه." });
     }
   });
 
   // ===============================
   // POST /api/invitations/accept (پذیرش دعوت)
+  // body: { token }
   // ===============================
   router.post("/accept", authMiddleware, async (req, res) => {
     try {
@@ -99,7 +130,6 @@ module.exports = function (prisma) {
       const invitation = await prisma.childInvitation.findUnique({
         where: { token },
       });
-
       if (!invitation) {
         return res.status(404).json({
           ok: false,
@@ -131,24 +161,19 @@ module.exports = function (prisma) {
       if (exists) {
         return res.status(409).json({
           ok: false,
-          message: "شما قبلاً ادمین این کودک هستید.",
+          message: "شما قبلاً عضو درختواره این کودک هستید.",
         });
       }
 
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { gender: true },
-      });
-
-      let role = "parent";
-      if (user?.gender === "male") role = "father";
-      else if (user?.gender === "female") role = "mother";
+      // ✅ NEW: نقش از روی invitation
+      // (والدین مسیر جدا دارند؛ اینجا فقط برای اعضای دعوت‌شده است)
+      const roleFromInvite = invitation.relationType || "relative";
 
       await prisma.childAdmin.create({
         data: {
           childId: invitation.childId,
           userId,
-          role,
+          role: roleFromInvite,
           isPrimary: false,
         },
       });
@@ -161,13 +186,16 @@ module.exports = function (prisma) {
         },
       });
 
-      res.json({
+      return res.json({
         ok: true,
         message: "دعوت با موفقیت پذیرفته شد.",
+        childId: invitation.childId,
+        role: roleFromInvite,
+        slot: invitation.slot,
       });
     } catch (error) {
       console.error("❌ Accept invitation error:", error);
-      res.status(500).json({
+      return res.status(500).json({
         ok: false,
         message: "خطای سرور در پذیرش دعوت.",
       });

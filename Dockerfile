@@ -1,7 +1,7 @@
 # -----------------------
 # 1) Base image
 # -----------------------
-FROM node:18-alpine
+FROM node:18
 
 # -----------------------
 # 2) Create app folder
@@ -9,26 +9,16 @@ FROM node:18-alpine
 WORKDIR /app
 
 # -----------------------
-# 3) Copy package files
-# -----------------------
-COPY package*.json ./
-
-# -----------------------
-# 4) Install dependencies
-# -----------------------
-RUN npm install
-
-# -----------------------
-# 5) Copy app source code
+# 3) Copy app source code (includes node_modules if not ignored)
 # -----------------------
 COPY . .
 
 # -----------------------
-# 6) Expose backend port
+# 4) Expose backend port
 # -----------------------
 EXPOSE 80
 
 # -----------------------
-# 7) Start the backend
+# 5) Start the backend
 # -----------------------
 CMD ["node", "server.js"]

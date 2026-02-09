@@ -1,6 +1,7 @@
 // middleware/authMiddleware.js
-
 const jwt = require("jsonwebtoken");
+
+const JWT_SECRET = process.env.JWT_SECRET || "dev-genino-secret"; // ✅ مثل authController
 
 module.exports = function (req, res, next) {
   try {
@@ -25,7 +26,7 @@ module.exports = function (req, res, next) {
     }
 
     // 3) بررسی صحت توکن
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, JWT_SECRET); // ✅ این خط مهمه
 
     // 4) قرار دادن کاربر داخل req برای استفاده در کنترلرها
     req.user = decoded;
