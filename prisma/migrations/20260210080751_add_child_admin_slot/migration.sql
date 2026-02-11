@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "ChildAdmin" ADD COLUMN     "slot" INTEGER NOT NULL DEFAULT 0;

@@ -46,5 +46,41 @@ module.exports = function (prisma) {
     }
   });
 
+  /**
+ * GET /api/family-tree/:childId/members
+ * لیست اعضای متصل شده (accepted)
+ */
+router.get("/:childId/members", authMiddleware, async (req, res) => {
+  try {
+    const childId = Number(req.params.childId);
+    if (!childId) {
+      return res.status(400).json({ ok: false, message: "childId نامعتبر است." });
+    }
+
+    const members = await prisma.childAdmin.findMany({
+      where: { childId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+          },
+        },
+      },
+      orderBy: [{ role: "asc" }, { slot: "asc" }],
+    });
+
+    res.json({
+      ok: true,
+      childId,
+      members,
+    });
+  } catch (err) {
+    console.error("familyTree members error:", err);
+    res.status(500).json({ ok: false, message: "خطای سرور" });
+  }
+});
+
   return router;
 };

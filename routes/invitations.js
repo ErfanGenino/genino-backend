@@ -168,15 +168,18 @@ module.exports = function (prisma) {
       // ✅ NEW: نقش از روی invitation
       // (والدین مسیر جدا دارند؛ اینجا فقط برای اعضای دعوت‌شده است)
       const roleFromInvite = invitation.relationType || "relative";
+      const slotFromInvite = Number.isFinite(invitation.slot) ? invitation.slot : 0;
 
       await prisma.childAdmin.create({
         data: {
           childId: invitation.childId,
           userId,
           role: roleFromInvite,
+          slot: slotFromInvite, // ✅ NEW
           isPrimary: false,
         },
       });
+
 
       await prisma.childInvitation.update({
         where: { id: invitation.id },

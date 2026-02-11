@@ -99,6 +99,7 @@ model ChildAdmin {
   childId   Int
   userId    Int
   role      String
+  slot      Int      @default(0)
   isPrimary Boolean  @default(false)
   createdAt DateTime @default(now())
   child     Child    @relation(fields: [childId], references: [id], onDelete: Cascade)
