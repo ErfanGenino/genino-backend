@@ -205,5 +205,57 @@ module.exports = function (prisma) {
     }
   });
 
+    // ===============================
+  // DELETE /api/invitations/:invitationId (لغو/حذف دعوت Pending)
+  // ===============================
+  router.delete("/:invitationId", authMiddleware, async (req, res) => {
+    try {
+      const userId = req.user.userId;
+      const invitationId = Number(req.params.invitationId);
+
+      if (!invitationId) {
+        return res.status(400).json({ ok: false, message: "invitationId نامعتبر است." });
+      }
+
+      const invitation = await prisma.childInvitation.findUnique({
+        where: { id: invitationId },
+      });
+
+      if (!invitation) {
+        return res.status(404).json({ ok: false, message: "دعوت پیدا نشد." });
+      }
+
+      if (invitation.accepted) {
+        return res.status(409).json({ ok: false, message: "این دعوت قبلاً پذیرفته شده و قابل حذف نیست." });
+      }
+
+      // ✅ بررسی ادمین بودن کاربر برای همان کودک
+      const admin = await prisma.childAdmin.findFirst({
+        where: { childId: invitation.childId, userId },
+      });
+
+      if (!admin) {
+        return res.status(403).json({ ok: false, message: "شما اجازه لغو این دعوت را ندارید." });
+      }
+
+      await prisma.childInvitation.delete({
+        where: { id: invitationId },
+      });
+
+      return res.json({
+        ok: true,
+        message: "دعوت با موفقیت لغو شد.",
+        invitationId,
+        childId: invitation.childId,
+        relationType: invitation.relationType,
+        slot: invitation.slot,
+      });
+    } catch (error) {
+      console.error("❌ Cancel invitation error:", error);
+      return res.status(500).json({ ok: false, message: "خطای سرور در لغو دعوت." });
+    }
+  });
+
+
   return router;
 };

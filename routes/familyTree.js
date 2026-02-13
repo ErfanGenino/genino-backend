@@ -82,5 +82,64 @@ router.get("/:childId/members", authMiddleware, async (req, res) => {
   }
 });
 
+  /**
+   * DELETE /api/family-tree/:childId/members/:memberId
+   * لغو اتصال یک عضو (CONNECTED)
+   */
+  router.delete("/:childId/members/:memberId", authMiddleware, async (req, res) => {
+    try {
+      const userId = req.user.userId;
+      const childId = Number(req.params.childId);
+      const memberId = Number(req.params.memberId);
+
+      if (!childId || !memberId) {
+        return res.status(400).json({ ok: false, message: "childId یا memberId نامعتبر است." });
+      }
+
+      // ✅ بررسی ادمین بودن درخواست‌دهنده برای همان کودک
+      const admin = await prisma.childAdmin.findFirst({
+        where: { childId, userId },
+      });
+
+      if (!admin) {
+        return res.status(403).json({ ok: false, message: "شما اجازه لغو اتصال برای این کودک را ندارید." });
+      }
+
+      // عضو هدف
+      const member = await prisma.childAdmin.findUnique({
+        where: { id: memberId },
+      });
+
+      if (!member || member.childId !== childId) {
+        return res.status(404).json({ ok: false, message: "عضو پیدا نشد." });
+      }
+
+      // ✅ جلوگیری از حذف primary
+      if (member.isPrimary) {
+        return res.status(409).json({ ok: false, message: "عضو اصلی قابل حذف نیست." });
+      }
+
+      // ✅ (اختیاری ولی بهتر) جلوگیری از حذف خود
+      if (member.userId === userId) {
+        return res.status(409).json({ ok: false, message: "شما نمی‌توانید اتصال خودتان را حذف کنید." });
+      }
+
+      await prisma.childAdmin.delete({
+        where: { id: memberId },
+      });
+
+      return res.json({
+        ok: true,
+        message: "اتصال عضو با موفقیت لغو شد.",
+        memberId,
+        childId,
+      });
+    } catch (err) {
+      console.error("familyTree remove member error:", err);
+      return res.status(500).json({ ok: false, message: "خطای سرور" });
+    }
+  });
+
+
   return router;
 };
