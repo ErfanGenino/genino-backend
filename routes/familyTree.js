@@ -14,6 +14,24 @@ module.exports = function (prisma) {
       if (!childId) {
         return res.status(400).json({ ok: false, message: "childId نامعتبر است." });
       }
+          // ✅ Authorization: فقط ادمین همین کودک
+    const userId = req.user.userId;
+
+    const admin = await prisma.childAdmin.findFirst({
+      where: {
+      childId,
+      userId,
+      role: { in: ["father", "mother"] },
+      },
+    });
+
+
+    if (!admin) {
+      return res.status(403).json({
+        ok: false,
+        message: "شما اجازه دسترسی به اطلاعات این کودک را ندارید.",
+      });
+    }
 
       const now = new Date();
 
@@ -27,6 +45,7 @@ module.exports = function (prisma) {
           id: true,
           email: true,
           phone: true,
+          token: true,
           relationType: true,
           slot: true,
           roleLabel: true,
@@ -56,6 +75,20 @@ router.get("/:childId/members", authMiddleware, async (req, res) => {
     if (!childId) {
       return res.status(400).json({ ok: false, message: "childId نامعتبر است." });
     }
+        // ✅ Authorization: فقط ادمین همین کودک
+    const userId = req.user.userId;
+
+    const admin = await prisma.childAdmin.findFirst({
+      where: { childId, userId },
+    });
+
+    if (!admin) {
+      return res.status(403).json({
+        ok: false,
+        message: "شما اجازه دسترسی به اطلاعات این کودک را ندارید.",
+      });
+    }
+
 
     const members = await prisma.childAdmin.findMany({
       where: { childId },
@@ -98,8 +131,13 @@ router.get("/:childId/members", authMiddleware, async (req, res) => {
 
       // ✅ بررسی ادمین بودن درخواست‌دهنده برای همان کودک
       const admin = await prisma.childAdmin.findFirst({
-        where: { childId, userId },
+        where: {
+          childId,
+          userId,
+          role: { in: ["father", "mother"] },
+        },
       });
+
 
       if (!admin) {
         return res.status(403).json({ ok: false, message: "شما اجازه لغو اتصال برای این کودک را ندارید." });

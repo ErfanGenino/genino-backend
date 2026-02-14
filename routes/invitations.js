@@ -45,10 +45,49 @@ module.exports = function (prisma) {
         });
       }
 
-      // 2) بررسی ادمین بودن کاربر
-      const admin = await prisma.childAdmin.findFirst({
-        where: { childId: Number(childId), userId },
+      // 1) اگر آن جایگاه قبلاً CONNECTED شده باشد، اجازه دعوت نده
+      const alreadyConnected = await prisma.childAdmin.findFirst({
+        where: {
+          childId: Number(childId),
+          role: relationType.trim(),
+          slot: slotValue,
+        },
       });
+
+      if (alreadyConnected) {
+      return res.status(409).json({
+        ok: false,
+          message: "این جایگاه قبلاً پر شده است و امکان ارسال دعوت ندارد.",
+        });
+      }
+
+      // 2) اگر برای همان جایگاه دعوت فعال وجود دارد، دوباره دعوت نده
+      const existingSlotInvite = await prisma.childInvitation.findFirst({
+        where: {
+          childId: Number(childId),
+          relationType: relationType.trim(),
+          slot: slotValue,
+          accepted: false,
+          expiresAt: { gt: new Date() },
+        },
+      });
+
+      if (existingSlotInvite) {
+      return res.status(409).json({
+        ok: false,
+          message: "برای این جایگاه قبلاً دعوت فعال ارسال شده است.",
+        });
+      }
+
+      // 2) بررسی ادمین بودن کاربر (فقط پدر/مادر)
+      const admin = await prisma.childAdmin.findFirst({
+        where: {
+          childId: Number(childId),
+          userId,
+          role: { in: ["father", "mother"] },
+        },
+      });
+
 
       if (!admin) {
         return res.status(403).json({
@@ -229,10 +268,15 @@ module.exports = function (prisma) {
         return res.status(409).json({ ok: false, message: "این دعوت قبلاً پذیرفته شده و قابل حذف نیست." });
       }
 
-      // ✅ بررسی ادمین بودن کاربر برای همان کودک
+      // ✅ بررسی ادمین بودن کاربر برای همان کودک (فقط پدر/مادر)
       const admin = await prisma.childAdmin.findFirst({
-        where: { childId: invitation.childId, userId },
+        where: {
+          childId: invitation.childId,
+          userId,
+          role: { in: ["father", "mother"] },
+        },
       });
+
 
       if (!admin) {
         return res.status(403).json({ ok: false, message: "شما اجازه لغو این دعوت را ندارید." });

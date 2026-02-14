@@ -106,6 +106,7 @@ model ChildAdmin {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([childId, userId])
+  @@unique([childId, role, slot])
 }
 
 model ChildInvitation {
