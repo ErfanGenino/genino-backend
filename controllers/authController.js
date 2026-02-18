@@ -195,20 +195,30 @@ exports.getProfile = async (req, res, prisma) => {
     }
 
     return res.json({
-      ok: true,
-      user: {
-        id: user.id,
-        email: user.email,
-        fullName: user.fullName,
-        lifeStage: user.lifeStage || "user",
-      },
-    });
-
+  ok: true,
+  user: {
+    id: user.id,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    fullName: user.fullName,
+    email: user.email,
+    phone: user.phone,
+    username: user.username,
+    gender: user.gender,
+    birthDate: user.birthDate,
+    province: user.province,
+    city: user.city,
+    lifeStage: user.lifeStage || "user",
+    createdAt: user.createdAt,
+    avatarUrl: user.avatarUrl,
+  },
+});
   } catch (err) {
     console.error("PROFILE ERROR:", err);
     return res.status(500).json({ ok:false, message:"خطای داخلی سرور." });
   }
 };
+
 
 // 📌 UPDATE LIFE STAGE
 exports.updateLifeStage = async (req, res, prisma) => {
@@ -236,3 +246,123 @@ exports.updateLifeStage = async (req, res, prisma) => {
     return res.status(500).json({ ok:false, message:"خطای سرور." });
   }
 };
+
+// 📌 UPDATE PROFILE (me)
+exports.updateProfile = async (req, res, prisma) => {
+  try {
+    const userId = req.user.userId;
+
+    const {
+      firstName,
+      lastName,
+      gender,
+      birthDate,
+      province,
+      city,
+      username,
+      phone,
+      avatarUrl,
+      lifeStage,
+    } = req.body;
+
+    // ✅ فقط همین stage ها مجازند
+    const allowedStages = ["user", "single", "couple", "pregnancy", "parent"];
+    if (lifeStage && !allowedStages.includes(lifeStage)) {
+      return res.status(400).json({ ok: false, message: "مرحله زندگی معتبر نیست." });
+    }
+
+    // ✅ آماده‌سازی داده‌های قابل آپدیت (فقط whitelist)
+    const data = {};
+
+    if (typeof firstName === "string") data.firstName = firstName.trim();
+    if (typeof lastName === "string") data.lastName = lastName.trim();
+
+    // fullName را هم هماهنگ نگه داریم
+    if (data.firstName || data.lastName) {
+      // اول کاربر فعلی را بگیر تا اگر یکی از فیلدها نیامده بود، خراب نشود
+      const current = await prisma.user.findUnique({ where: { id: userId } });
+      const fn = (data.firstName ?? current.firstName ?? "").trim();
+      const ln = (data.lastName ?? current.lastName ?? "").trim();
+      data.fullName = `${fn} ${ln}`.trim();
+    }
+
+    if (typeof gender === "string") data.gender = gender.trim();
+    if (typeof province === "string") data.province = province.trim();
+    if (typeof city === "string") data.city = city.trim();
+    if (typeof avatarUrl === "string") data.avatarUrl = avatarUrl.trim();
+
+    // اگر birthDate به صورت ISO از فرانت آمد:
+    if (birthDate) {
+      const dt = new Date(birthDate);
+      if (isNaN(dt.getTime())) {
+        return res.status(400).json({ ok: false, message: "فرمت تاریخ تولد معتبر نیست." });
+      }
+      data.birthDate = dt;
+    }
+
+    if (lifeStage) data.lifeStage = lifeStage;
+
+    // ✅ نکته: username/phone را هم اجازه می‌دهیم ولی باید uniqueness چک شود
+    // (اگر نمی‌خوای فعلاً قابل تغییر باشن، بگو تا ببندیمش)
+    if (typeof username === "string") data.username = username.trim() || null;
+    if (typeof phone === "string") data.phone = phone.trim() || null;
+
+    // اگر هیچ چیزی برای آپدیت نیومده بود
+    if (Object.keys(data).length === 0) {
+      return res.json({ ok: true, message: "چیزی برای تغییر ارسال نشده است." });
+    }
+
+    // ✅ چک تکراری‌ها (فقط اگر تغییر دادن)
+    if (data.username) {
+      const exists = await prisma.user.findFirst({
+        where: { username: data.username, NOT: { id: userId } },
+        select: { id: true },
+      });
+      if (exists) return res.status(409).json({ ok: false, message: "این نام کاربری قبلاً ثبت شده است." });
+    }
+
+    if (data.phone) {
+      const exists = await prisma.user.findFirst({
+        where: { phone: data.phone, NOT: { id: userId } },
+        select: { id: true },
+      });
+      if (exists) return res.status(409).json({ ok: false, message: "این شماره موبایل قبلاً ثبت شده است." });
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data,
+    });
+
+    return res.json({
+      ok: true,
+      message: "پروفایل با موفقیت ذخیره شد.",
+      user: {
+        id: updated.id,
+        firstName: updated.firstName,
+        lastName: updated.lastName,
+        fullName: updated.fullName,
+        email: updated.email,
+        phone: updated.phone,
+        username: updated.username,
+        gender: updated.gender,
+        birthDate: updated.birthDate,
+        province: updated.province,
+        city: updated.city,
+        lifeStage: updated.lifeStage || "user",
+        createdAt: updated.createdAt,
+        avatarUrl: updated.avatarUrl,
+      },
+    });
+  } catch (err) {
+    console.error("UPDATE PROFILE ERROR:", err);
+
+    // Prisma unique error (fallback)
+    if (err?.code === "P2002") {
+      return res.status(409).json({ ok: false, message: "اطلاعات تکراری است." });
+    }
+
+    return res.status(500).json({ ok: false, message: "خطای داخلی سرور." });
+  }
+};
+

@@ -84,6 +84,9 @@ app.use("/api/invitations", invitationsRoutes(prisma));
 const familyTreeRoutes = require("./routes/familyTree");
 app.use("/api/family-tree", familyTreeRoutes(prisma));
 
+// --- Uploads Routes ---
+const uploadsRoutes = require("./routes/uploads");
+app.use("/api/uploads", uploadsRoutes());
 
 // --- Protected Test Route ---
 app.get("/api/protected", authMiddleware, (req, res) => {

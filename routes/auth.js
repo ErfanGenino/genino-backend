@@ -5,7 +5,8 @@ const {
   register,
   login,
   getProfile,
-  updateLifeStage
+  updateLifeStage,
+  updateProfile,
 } = require("../controllers/authController");
 
 const authMiddleware = require("../middleware/authMiddleware");
@@ -18,9 +19,9 @@ module.exports = function (prisma) {
   router.get("/profile", authMiddleware, (req, res) => getProfile(req, res, prisma));
 
   // ⭐ مسیر جدید برای آپدیت مرحله زندگی
-  router.put("/update-life-stage", authMiddleware, (req, res) =>
-    updateLifeStage(req, res, prisma)
-  );
+  router.put("/update-life-stage", authMiddleware, (req, res) => updateLifeStage(req, res, prisma));
+  router.put("/profile", authMiddleware, (req, res) => updateProfile(req, res, prisma));
 
+  
   return router;
 };
