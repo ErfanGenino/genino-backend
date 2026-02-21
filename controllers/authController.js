@@ -188,7 +188,14 @@ exports.login = async (req, res, prisma) => {
 // 📌 GET PROFILE
 exports.getProfile = async (req, res, prisma) => {
   try {
-    const user = await prisma.user.findUnique({ where: { id: req.user.userId } });
+    const user = await prisma.user.findUnique({
+     where: { id: req.user.userId },
+     include: {
+     addresses: {
+      orderBy: { createdAt: "asc" },
+    },
+    },
+    });
 
     if (!user) {
       return res.status(404).json({ ok:false, message:"کاربر پیدا نشد." });
@@ -211,6 +218,8 @@ exports.getProfile = async (req, res, prisma) => {
     lifeStage: user.lifeStage || "user",
     createdAt: user.createdAt,
     avatarUrl: user.avatarUrl,
+    nationalCode: user.nationalCode,
+    addresses: user.addresses || [],
   },
 });
   } catch (err) {
@@ -263,6 +272,8 @@ exports.updateProfile = async (req, res, prisma) => {
       phone,
       avatarUrl,
       lifeStage,
+      nationalCode,
+      addresses,
     } = req.body;
 
     // ✅ فقط همین stage ها مجازند
@@ -290,6 +301,11 @@ exports.updateProfile = async (req, res, prisma) => {
     if (typeof province === "string") data.province = province.trim();
     if (typeof city === "string") data.city = city.trim();
     if (typeof avatarUrl === "string") data.avatarUrl = avatarUrl.trim();
+    // ✅ nationalCode
+    if (typeof nationalCode === "string") {
+      const nc = nationalCode.trim() || null;
+      data.nationalCode = nc;
+    }
 
     // اگر birthDate به صورت ISO از فرانت آمد:
     if (birthDate) {
@@ -299,6 +315,16 @@ exports.updateProfile = async (req, res, prisma) => {
       }
       data.birthDate = dt;
     }
+
+    if (data.nationalCode) {
+  const exists = await prisma.user.findFirst({
+    where: { nationalCode: data.nationalCode, NOT: { id: userId } },
+    select: { id: true },
+  });
+  if (exists) {
+    return res.status(409).json({ ok: false, message: "این کد ملی قبلاً ثبت شده است." });
+  }
+}
 
     if (lifeStage) data.lifeStage = lifeStage;
 
@@ -329,10 +355,145 @@ exports.updateProfile = async (req, res, prisma) => {
       if (exists) return res.status(409).json({ ok: false, message: "این شماره موبایل قبلاً ثبت شده است." });
     }
 
-    const updated = await prisma.user.update({
-      where: { id: userId },
-      data,
+    // ✅ addresses (max 5)
+if (addresses !== undefined) {
+  if (!Array.isArray(addresses)) {
+    return res.status(400).json({ ok: false, message: "فرمت آدرس‌ها معتبر نیست." });
+  }
+
+  if (addresses.length > 5) {
+    return res.status(400).json({ ok: false, message: "حداکثر ۵ آدرس قابل ثبت است." });
+  }
+
+  // پاکسازی و اعتبارسنجی
+  const cleaned = addresses.map((a) => ({
+    id: a?.id ? Number(a.id) : null, // برای آپدیت
+    label: typeof a?.label === "string" ? a.label.trim() : "",
+    address: typeof a?.address === "string" ? a.address.trim() : "",
+    postalCode: typeof a?.postalCode === "string" ? a.postalCode.trim() : null,
+    isDefault: !!a?.isDefault,
+  }));
+
+  // ✅ label تکراری نباشد (به خاطر @@unique([userId, label]))
+const labels = cleaned.map((a) => a.label.toLowerCase());
+const hasDuplicateLabel = new Set(labels).size !== labels.length;
+if (hasDuplicateLabel) {
+  return res.status(400).json({
+    ok: false,
+    message: "عنوان آدرس‌ها نباید تکراری باشد. (مثلاً دو تا «خانه» ثبت نکن)",
+  });
+}
+
+  // حداقل فیلدهای لازم
+  for (const a of cleaned) {
+    if (!a.label || !a.address) {
+      return res.status(400).json({ ok: false, message: "برای هر آدرس، عنوان و متن آدرس الزامی است." });
+    }
+  }
+
+  // ✅ اگر یکی default شد، بقیه را false کن تا همیشه فقط ۱ پیش‌فرض داشته باشیم
+const selectedDefault = cleaned.find((a) => a.isDefault);
+
+if (selectedDefault) {
+  // اول همه false
+  await prisma.userAddress.updateMany({
+    where: { userId },
+    data: { isDefault: false },
+  });
+
+  // بعد فقط یکی true
+  if (selectedDefault.id) {
+    await prisma.userAddress.updateMany({
+      where: { userId, id: selectedDefault.id },
+      data: { isDefault: true },
     });
+  } else {
+    // اگر تازه ساخته شده و id ندارد، با label + address پیداش کن
+    await prisma.userAddress.updateMany({
+      where: { userId, label: selectedDefault.label, address: selectedDefault.address },
+      data: { isDefault: true },
+    });
+  }
+}
+
+  // فقط یک default مجاز
+  const defaults = cleaned.filter((a) => a.isDefault);
+  if (defaults.length > 1) {
+    return res.status(400).json({ ok: false, message: "فقط یک آدرس می‌تواند پیش‌فرض باشد." });
+  }
+
+  // transaction: user + addresses
+  // 1) آدرس‌های فعلی کاربر را بگیر
+  const current = await prisma.userAddress.findMany({
+    where: { userId },
+    select: { id: true },
+  });
+  const currentIds = new Set(current.map((x) => x.id));
+
+  const incomingIds = new Set(cleaned.filter((x) => Number.isInteger(x.id)).map((x) => x.id));
+  const toDelete = [...currentIds].filter((id) => !incomingIds.has(id));
+
+  // 2) حذف آدرس‌هایی که دیگر وجود ندارند
+  if (toDelete.length) {
+    await prisma.userAddress.deleteMany({
+      where: { userId, id: { in: toDelete } },
+    });
+  }
+
+  // 3) upsert آدرس‌های incoming
+  for (const a of cleaned) {
+    if (a.id) {
+      const updatedCount = await prisma.userAddress.updateMany({
+  where: { id: a.id, userId },
+  data: {
+    label: a.label,
+    address: a.address,
+    postalCode: a.postalCode,
+    isDefault: a.isDefault,
+  },
+});
+
+if (updatedCount.count === 0) {
+  return res.status(403).json({ ok: false, message: "اجازه ویرایش این آدرس را ندارید." });
+}
+    } else {
+      await prisma.userAddress.create({
+        data: {
+          userId,
+          label: a.label,
+          address: a.address,
+          postalCode: a.postalCode,
+          isDefault: a.isDefault,
+        },
+      });
+    }
+  }
+
+  // اگر هیچ default نداد، و حداقل یک آدرس هست، اولی را default کن
+  if (cleaned.length > 0 && defaults.length === 0) {
+    const first = await prisma.userAddress.findFirst({
+      where: { userId },
+      orderBy: { createdAt: "asc" },
+      select: { id: true },
+    });
+    if (first) {
+      await prisma.userAddress.update({
+        where: { id: first.id },
+        data: { isDefault: true },
+      });
+    }
+  }
+}
+
+    const updated = await prisma.user.update({
+  where: { id: userId },
+  data,
+  include: {
+    addresses: {
+      orderBy: { createdAt: "asc" },
+    },
+  },
+});
 
     return res.json({
       ok: true,
@@ -352,6 +513,8 @@ exports.updateProfile = async (req, res, prisma) => {
         lifeStage: updated.lifeStage || "user",
         createdAt: updated.createdAt,
         avatarUrl: updated.avatarUrl,
+        nationalCode: updated.nationalCode,
+        addresses: updated.addresses || [],
       },
     });
   } catch (err) {
