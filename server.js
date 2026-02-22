@@ -6,6 +6,7 @@ const cors = require("cors");
 const dotenv = require("dotenv");
 const { PrismaClient } = require("@prisma/client");
 const authMiddleware = require("./middleware/authMiddleware");
+const inspirationRoutes = require("./routes/inspiration");
 
 dotenv.config({ path: "prisma/.env" });
 
@@ -88,6 +89,9 @@ app.use("/api/family-tree", familyTreeRoutes(prisma));
 const uploadsRoutes = require("./routes/uploads");
 app.use("/api/uploads", uploadsRoutes());
 
+// ✅ Inspiration Routes (قبل از listen)
+app.use("/api/inspiration", inspirationRoutes(prisma));
+
 // --- Protected Test Route ---
 app.get("/api/protected", authMiddleware, (req, res) => {
   res.json({
@@ -101,4 +105,5 @@ app.get("/api/protected", authMiddleware, (req, res) => {
 app.listen(PORT, () => {
   console.log(`🚀 Genino backend running on port ${PORT}`);
 });
+
 

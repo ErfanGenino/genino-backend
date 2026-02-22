@@ -31,6 +31,7 @@ model User {
   invitations   ChildInvitation[]
   savedArticles SavedArticle[]
   addresses UserAddress[]
+  inspirationActions InspirationAction[]
 }
 
 model Child {
@@ -150,4 +151,41 @@ model UserAddress {
 
   @@index([userId])
   @@unique([userId, label])
+}
+
+model InspirationItem {
+  id          Int      @id @default(autoincrement())
+  mode        String   // calm, focus, energy, relation, discipline
+  quote       String
+  author      String?
+  exerciseTitle String
+  exerciseText  String
+  durationSec Int      @default(180)
+  reflectionQuestion String
+  reflectionHint     String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([mode])
+  @@index([isActive])
+}
+
+model InspirationAction {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  dateKey   String   // YYYY-MM-DD
+  mode      String
+  completed Boolean  @default(false)
+  saved     Boolean  @default(false)
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dateKey, mode])
+  @@index([userId])
+  @@index([dateKey])
+  @@index([mode])
 }
