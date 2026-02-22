@@ -85,6 +85,10 @@ app.use("/api/invitations", invitationsRoutes(prisma));
 const familyTreeRoutes = require("./routes/familyTree");
 app.use("/api/family-tree", familyTreeRoutes(prisma));
 
+// --- Reminders Routes ---
+const remindersRoutes = require("./routes/reminders");
+app.use("/api/reminders", remindersRoutes(prisma));
+
 // --- Uploads Routes ---
 const uploadsRoutes = require("./routes/uploads");
 app.use("/api/uploads", uploadsRoutes());
