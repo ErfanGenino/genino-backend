@@ -93,6 +93,10 @@ app.use("/api/reminders", remindersRoutes(prisma));
 const myCycleRoutes = require("./routes/myCycle");
 app.use("/api/my-cycle", myCycleRoutes(prisma));
 
+// --- Women Health Routes ---
+const womenHealthRoutes = require("./routes/womenHealth");
+app.use("/api/women-health", womenHealthRoutes(prisma));
+
 
 // --- Uploads Routes ---
 const uploadsRoutes = require("./routes/uploads");

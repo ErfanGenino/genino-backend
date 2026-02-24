@@ -34,6 +34,7 @@ model User {
   inspirationActions InspirationAction[]
   reminders          Reminder[]
   womenCycle         WomenCycle?
+  womenHealthReports WomenHealthReport[]
 }
 
 model Child {
@@ -229,4 +230,25 @@ model WomenCycle {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+model WomenHealthReport {
+  id        Int      @id @default(autoincrement())
+
+  // گزارش مربوط به کدام کاربر است؟
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // تاریخ ثبت (همونی که از فرانت میاد: مثلا "1404/08/02")
+  date      String
+
+  // امتیازها (skin/breast/vagina/uterus) به صورت JSON
+  scores    Json
+
+  // جواب‌های خام تست (برای گزارش کامل‌تر در آینده)
+  answers   Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
 }
