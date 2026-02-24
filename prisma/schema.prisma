@@ -1,6 +1,6 @@
 generator client {
   provider      = "prisma-client-js"
-  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x", "debian-openssl-3.0.x"]
 }
 
 datasource db {
@@ -33,6 +33,7 @@ model User {
   addresses          UserAddress[]
   inspirationActions InspirationAction[]
   reminders          Reminder[]
+  womenCycle         WomenCycle?
 }
 
 model Child {
@@ -208,4 +209,24 @@ model Reminder {
   @@index([userId])
   @@index([remindAt])
   @@index([type])
+}
+
+model WomenCycle {
+  id           Int      @id @default(autoincrement())
+  userId       Int      @unique
+
+  // تاریخ شروع آخرین قاعدگی (به میلادی در DB)
+  lastPeriodAt DateTime
+
+  // طول چرخه و طول پریود
+  cycleLength  Int      @default(28)
+  periodLength Int      @default(5)
+
+  // برای گزارش/دیباگ: آخرین آپدیت از طرف کاربر
+  updatedAt    DateTime @updatedAt
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
