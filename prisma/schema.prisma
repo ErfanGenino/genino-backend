@@ -35,6 +35,7 @@ model User {
   reminders          Reminder[]
   womenCycle         WomenCycle?
   womenHealthReports WomenHealthReport[]
+  medicalRecords     MedicalRecord[]
 }
 
 model Child {
@@ -213,19 +214,19 @@ model Reminder {
 }
 
 model WomenCycle {
-  id           Int      @id @default(autoincrement())
-  userId       Int      @unique
+  id     Int @id @default(autoincrement())
+  userId Int @unique
 
   // تاریخ شروع آخرین قاعدگی (به میلادی در DB)
   lastPeriodAt DateTime
 
   // طول چرخه و طول پریود
-  cycleLength  Int      @default(28)
-  periodLength Int      @default(5)
+  cycleLength  Int @default(28)
+  periodLength Int @default(5)
 
   // برای گزارش/دیباگ: آخرین آپدیت از طرف کاربر
-  updatedAt    DateTime @updatedAt
-  createdAt    DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -233,22 +234,54 @@ model WomenCycle {
 }
 
 model WomenHealthReport {
-  id        Int      @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
   // گزارش مربوط به کدام کاربر است؟
-  userId    Int
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId Int
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // تاریخ ثبت (همونی که از فرانت میاد: مثلا "1404/08/02")
-  date      String
+  date String
 
   // امتیازها (skin/breast/vagina/uterus) به صورت JSON
-  scores    Json
+  scores Json
 
   // جواب‌های خام تست (برای گزارش کامل‌تر در آینده)
-  answers   Json?
+  answers Json?
 
   createdAt DateTime @default(now())
 
   @@index([userId, createdAt])
+}
+
+model MedicalRecord {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  title       String
+  doctor      String?
+  category    String
+  recordDate  DateTime // تاریخ گزارش (گرگوریان)
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  attachments MedicalAttachment[]
+
+  @@index([userId, recordDate])
+  @@index([userId, category])
+}
+
+model MedicalAttachment {
+  id        Int      @id @default(autoincrement())
+  recordId  Int
+  fileName  String
+  mimeType  String
+  fileSize  Int?
+  url       String // لینک فایل (S3/Arvan)
+  createdAt DateTime @default(now())
+
+  record MedicalRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+
+  @@index([recordId])
 }
