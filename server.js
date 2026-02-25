@@ -15,6 +15,11 @@ const prisma = new PrismaClient();
 
 const PORT = process.env.PORT || 80;
 
+app.use((req, _res, next) => {
+  req.prisma = prisma;
+  next();
+});
+
 
 
 // --- CORS ---
@@ -96,6 +101,10 @@ app.use("/api/my-cycle", myCycleRoutes(prisma));
 // --- Women Health Routes ---
 const womenHealthRoutes = require("./routes/womenHealth");
 app.use("/api/women-health", womenHealthRoutes(prisma));
+
+// --- Medical Records Routes ---
+const medicalRecordsRoutes = require("./routes/medicalRecords");
+app.use("/api/medical-records", medicalRecordsRoutes(prisma));
 
 
 // --- Uploads Routes ---
