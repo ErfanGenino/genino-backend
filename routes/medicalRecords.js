@@ -8,7 +8,7 @@ const {
   deleteMedicalRecord,
   getMedicalRecordById,
 } = require("../controllers/medicalRecordController");
-const { addMedicalAttachment } = require("../controllers/medicalAttachmentController");
+const { addMedicalAttachment, deleteMedicalAttachment } = require("../controllers/medicalAttachmentController");
 
 module.exports = function (prisma) {
   const router = express.Router();
@@ -42,6 +42,11 @@ module.exports = function (prisma) {
   router.post("/:id/attachments", authMiddleware, (req, res) =>
   addMedicalAttachment(req, res, prisma)
   );
+
+  // حذف فایل از یک رکورد پزشکی
+router.delete("/:id/attachments/:attachmentId", authMiddleware, (req, res) =>
+  deleteMedicalAttachment(req, res, prisma)
+);
 
   return router;
 };
