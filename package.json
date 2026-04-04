@@ -4,7 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "node server.js"
+  "dev": "node server.js",
+  "env:local": "copy .env.local .env",
+  "env:prod": "copy .env.production .env"
   },
   "keywords": [],
   "author": "",

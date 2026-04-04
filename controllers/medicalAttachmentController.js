@@ -35,11 +35,11 @@ exports.addMedicalAttachment = async (req, res, prisma) => {
     }
 
     // ✅ اعتبارسنجی ساده mimeType (فقط عکس + pdf)
-    const allowed = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
+    const allowed = ["image/jpeg","image/png","image/webp","application/pdf","application/vnd.openxmlformats-officedocument.wordprocessingml.document",];
     if (!allowed.includes(String(mimeType).toLowerCase().trim())) {
       return res.status(400).json({
         ok: false,
-        message: "mimeType مجاز نیست (فقط عکس یا PDF).",
+        message: "mimeType مجاز نیست (فقط عکس، PDF یا DOCX).",
       });
     }
 

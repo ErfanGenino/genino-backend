@@ -1,19 +1,20 @@
 // server.js — Genino Backend Entry
-// server.js — Genino Backend Entry
+
+const dotenv = require("dotenv");
+dotenv.config({ override: true });
 
 const express = require("express");
 const cors = require("cors");
-const dotenv = require("dotenv");
 const { PrismaClient } = require("@prisma/client");
 const authMiddleware = require("./middleware/authMiddleware");
 const inspirationRoutes = require("./routes/inspiration");
 
-dotenv.config({ path: "prisma/.env" });
 
 const app = express();
 const prisma = new PrismaClient();
 
 const PORT = process.env.PORT || 80;
+
 
 app.use((req, _res, next) => {
   req.prisma = prisma;
@@ -105,6 +106,12 @@ app.use("/api/women-health", womenHealthRoutes(prisma));
 // --- Medical Records Routes ---
 const medicalRecordsRoutes = require("./routes/medicalRecords");
 app.use("/api/medical-records", medicalRecordsRoutes(prisma));
+
+const chatRoutes = require("./routes/chat");
+app.use("/api/chat", chatRoutes(prisma));
+
+const usersRoutes = require("./routes/users");
+app.use("/api/users", usersRoutes(prisma));
 
 
 // --- Uploads Routes ---

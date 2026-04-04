@@ -23,19 +23,23 @@ model User {
   birthDate          DateTime?
   province           String?
   city               String?
-  avatarUrl          String?
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
   lifeStage          String?             @default("user")
+  avatarUrl          String?
   childAdmins        ChildAdmin[]
   invitations        ChildInvitation[]
+  inspirationActions InspirationAction[]
+  medicalRecords     MedicalRecord[]
+  reminders          Reminder[]
   savedArticles      SavedArticle[]
   addresses          UserAddress[]
-  inspirationActions InspirationAction[]
-  reminders          Reminder[]
   womenCycle         WomenCycle?
   womenHealthReports WomenHealthReport[]
-  medicalRecords     MedicalRecord[]
+  conversations1     Conversation[]      @relation("User1Conversations")
+  conversations2     Conversation[]      @relation("User2Conversations")
+  messages           Message[]
+  lastSocialSeenAt   DateTime?
 }
 
 model Child {
@@ -106,9 +110,9 @@ model ChildAdmin {
   childId   Int
   userId    Int
   role      String
-  slot      Int      @default(0)
   isPrimary Boolean  @default(false)
   createdAt DateTime @default(now())
+  slot      Int      @default(0)
   child     Child    @relation(fields: [childId], references: [id], onDelete: Cascade)
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -127,10 +131,9 @@ model ChildInvitation {
   accepted     Boolean   @default(false)
   acceptedAt   DateTime?
   createdAt    DateTime  @default(now())
-  // ✅ NEW: نقش و جایگاه در درختواره
-  relationType String    @default("relative") // e.g. "khale", "dayi", "aunt", "uncle", "friend", "relative"
-  slot         Int       @default(0) // 0,1,2... برای خاله اول/دوم/سوم
-  roleLabel    String? // e.g. "خاله" (اختیاری برای UI)
+  relationType String    @default("relative")
+  roleLabel    String?
+  slot         Int       @default(0)
   child        Child     @relation(fields: [childId], references: [id], onDelete: Cascade)
   inviter      User?     @relation(fields: [inviterId], references: [id])
 
@@ -144,14 +147,13 @@ model ChildInvitation {
 model UserAddress {
   id         Int      @id @default(autoincrement())
   userId     Int
-  label      String // مثل: خانه، شرکت
-  address    String // متن آدرس
-  postalCode String? // کد پستی (اختیاری)
+  label      String
+  address    String
+  postalCode String?
   isDefault  Boolean  @default(false)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, label])
   @@index([userId])
@@ -159,7 +161,7 @@ model UserAddress {
 
 model InspirationItem {
   id                 Int      @id @default(autoincrement())
-  mode               String // calm, focus, energy, relation, discipline
+  mode               String
   quote              String
   author             String?
   exerciseTitle      String
@@ -178,15 +180,14 @@ model InspirationItem {
 model InspirationAction {
   id        Int      @id @default(autoincrement())
   userId    Int
-  dateKey   String // YYYY-MM-DD
+  dateKey   String
   mode      String
   completed Boolean  @default(false)
   saved     Boolean  @default(false)
   note      String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, dateKey, mode])
   @@index([userId])
@@ -199,14 +200,13 @@ model Reminder {
   userId      Int
   title       String
   description String?
-  type        String // birthday | anniversary | other
-  repeat      String // yearly | once
+  type        String
+  repeat      String
   remindAt    DateTime
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([remindAt])
@@ -214,74 +214,87 @@ model Reminder {
 }
 
 model WomenCycle {
-  id     Int @id @default(autoincrement())
-  userId Int @unique
-
-  // تاریخ شروع آخرین قاعدگی (به میلادی در DB)
+  id           Int      @id @default(autoincrement())
+  userId       Int      @unique
   lastPeriodAt DateTime
-
-  // طول چرخه و طول پریود
-  cycleLength  Int @default(28)
-  periodLength Int @default(5)
-
-  // برای گزارش/دیباگ: آخرین آپدیت از طرف کاربر
-  updatedAt DateTime @updatedAt
-  createdAt DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cycleLength  Int      @default(28)
+  periodLength Int      @default(5)
+  updatedAt    DateTime @updatedAt
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
 
 model WomenHealthReport {
-  id Int @id @default(autoincrement())
-
-  // گزارش مربوط به کدام کاربر است؟
-  userId Int
-  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  // تاریخ ثبت (همونی که از فرانت میاد: مثلا "1404/08/02")
-  date String
-
-  // امتیازها (skin/breast/vagina/uterus) به صورت JSON
-  scores Json
-
-  // جواب‌های خام تست (برای گزارش کامل‌تر در آینده)
-  answers Json?
-
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  date      String
+  scores    Json
+  answers   Json?
   createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
 }
 
 model MedicalRecord {
-  id          Int      @id @default(autoincrement())
+  id          Int                 @id @default(autoincrement())
   userId      Int
   title       String
   doctor      String?
   category    String
-  recordDate  DateTime // تاریخ گزارش (گرگوریان)
+  recordDate  DateTime
   description String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
   attachments MedicalAttachment[]
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, recordDate])
   @@index([userId, category])
 }
 
 model MedicalAttachment {
-  id        Int      @id @default(autoincrement())
+  id        Int           @id @default(autoincrement())
   recordId  Int
   fileName  String
   mimeType  String
   fileSize  Int?
-  url       String // لینک فایل (S3/Arvan)
-  createdAt DateTime @default(now())
-
-  record MedicalRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  url       String
+  createdAt DateTime      @default(now())
+  record    MedicalRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
 
   @@index([recordId])
+}
+
+model Conversation {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user1Id Int
+  user2Id Int
+
+  user1 User @relation("User1Conversations", fields: [user1Id], references: [id])
+  user2 User @relation("User2Conversations", fields: [user2Id], references: [id])
+
+  messages Message[]
+
+  @@unique([user1Id, user2Id])
+}
+
+model Message {
+  id             Int       @id @default(autoincrement())
+  conversationId Int
+  senderId       Int
+  text           String?
+  type           String // text | image | video
+  fileUrl        String?
+  status         String    @default("sent") // sent | read
+  readAt         DateTime?
+  createdAt      DateTime  @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User         @relation(fields: [senderId], references: [id])
 }
