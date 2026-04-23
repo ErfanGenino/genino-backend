@@ -1,6 +1,6 @@
 generator client {
   provider      = "prisma-client-js"
-  binaryTargets = ["native", "linux-musl-openssl-3.0.x", "debian-openssl-3.0.x"]
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
@@ -10,36 +10,44 @@ datasource db {
 }
 
 model User {
-  id                 Int                 @id @default(autoincrement())
-  firstName          String
-  lastName           String
-  fullName           String?
-  username           String?             @unique
-  nationalCode       String?             @unique
-  email              String              @unique
-  phone              String?             @unique
-  password           String
-  gender             String?
-  birthDate          DateTime?
-  province           String?
-  city               String?
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
-  lifeStage          String?             @default("user")
-  avatarUrl          String?
-  childAdmins        ChildAdmin[]
-  invitations        ChildInvitation[]
-  inspirationActions InspirationAction[]
-  medicalRecords     MedicalRecord[]
-  reminders          Reminder[]
-  savedArticles      SavedArticle[]
-  addresses          UserAddress[]
-  womenCycle         WomenCycle?
-  womenHealthReports WomenHealthReport[]
-  conversations1     Conversation[]      @relation("User1Conversations")
-  conversations2     Conversation[]      @relation("User2Conversations")
-  messages           Message[]
-  lastSocialSeenAt   DateTime?
+  id                   Int                       @id @default(autoincrement())
+  firstName            String
+  lastName             String
+  fullName             String?
+  username             String?                   @unique
+  nationalCode         String?                   @unique
+  email                String                    @unique
+  phone                String?                   @unique
+  password             String
+  gender               String?
+  birthDate            DateTime?
+  province             String?
+  city                 String?
+  createdAt            DateTime                  @default(now())
+  updatedAt            DateTime                  @updatedAt
+  lifeStage            String?                   @default("user")
+  avatarUrl            String?
+  lastSocialSeenAt     DateTime?
+  childAdmins          ChildAdmin[]
+  invitations          ChildInvitation[]
+  inspirationActions   InspirationAction[]
+  medicalRecords       MedicalRecord[]
+  reminders            Reminder[]
+  savedArticles        SavedArticle[]
+  addresses            UserAddress[]
+  womenCycle           WomenCycle?
+  womenHealthReports   WomenHealthReport[]
+  conversationsAsUser1 Conversation[]            @relation("ConversationUser1")
+  conversationsAsUser2 Conversation[]            @relation("ConversationUser2")
+  sentMessages         Message[]                 @relation("MessageSender")
+  messageReactions     MessageReaction[]
+  sentChatRoomMessages ChatRoomMessage[]         @relation("ChatRoomMessageSender")
+  chatRoomReactions    ChatRoomMessageReaction[]
+  chatRoomPresences    ChatRoomPresence[]
+  createdChatRooms     ChatRoom[]
+  favoriteChatRooms    FavoriteChatRoom[]
+  chatRoomMutes        ChatRoomMute[] @relation("MutedUser")
+  issuedChatRoomMutes  ChatRoomMute[] @relation("MutedByUser")
 }
 
 model Child {
@@ -270,18 +278,18 @@ model MedicalAttachment {
 
 model Conversation {
   id        Int      @id @default(autoincrement())
+  user1Id   Int
+  user2Id   Int
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user1Id Int
-  user2Id Int
-
-  user1 User @relation("User1Conversations", fields: [user1Id], references: [id])
-  user2 User @relation("User2Conversations", fields: [user2Id], references: [id])
-
+  user1    User      @relation("ConversationUser1", fields: [user1Id], references: [id], onDelete: Cascade)
+  user2    User      @relation("ConversationUser2", fields: [user2Id], references: [id], onDelete: Cascade)
   messages Message[]
 
-  @@unique([user1Id, user2Id])
+  @@index([user1Id])
+  @@index([user2Id])
+  @@index([updatedAt])
 }
 
 model Message {
@@ -289,12 +297,173 @@ model Message {
   conversationId Int
   senderId       Int
   text           String?
-  type           String // text | image | video
+  type           String    @default("text")
   fileUrl        String?
-  status         String    @default("sent") // sent | read
+  duration       Int?
+  status         String    @default("sent")
   readAt         DateTime?
-  createdAt      DateTime  @default(now())
+
+  replyToMessageId       Int?
+  forwardedFromMessageId Int?
+
+  deletedForEveryoneAt DateTime?
+  deletedBySenderAt    DateTime?
+  deletedByReceiverAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  sender       User         @relation(fields: [senderId], references: [id])
+  sender       User         @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+
+  replyToMessage Message?  @relation("MessageReply", fields: [replyToMessageId], references: [id], onDelete: SetNull)
+  replies        Message[] @relation("MessageReply")
+
+  forwardedFromMessage Message?  @relation("MessageForward", fields: [forwardedFromMessageId], references: [id], onDelete: SetNull)
+  forwardedCopies      Message[] @relation("MessageForward")
+
+  reactions MessageReaction[]
+
+  @@index([conversationId])
+  @@index([senderId])
+  @@index([createdAt])
+  @@index([readAt])
+  @@index([replyToMessageId])
+  @@index([forwardedFromMessageId])
+}
+
+model MessageReaction {
+  id        Int      @id @default(autoincrement())
+  messageId Int
+  userId    Int
+  emoji     String
+  createdAt DateTime @default(now())
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@index([messageId])
+  @@index([userId])
+}
+
+model ChatRoom {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String?
+  imageUrl    String?
+  creatorId   Int?
+  creator     User?    @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  favoritedBy FavoriteChatRoom[]
+  mutes       ChatRoomMute[]
+
+  messages  ChatRoomMessage[]
+  presences ChatRoomPresence[]
+
+  @@index([isActive])
+  @@index([updatedAt])
+  @@index([creatorId])
+}
+
+model ChatRoomMessage {
+  id       Int     @id @default(autoincrement())
+  roomId   Int
+  senderId Int
+  text     String?
+  type     String  @default("text")
+  fileUrl  String?
+  duration Int?
+
+  replyToMessageId       Int?
+  forwardedFromMessageId Int?
+
+  deletedForEveryoneAt DateTime?
+  deletedBySenderAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  room   ChatRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  sender User     @relation("ChatRoomMessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+
+  replyToMessage ChatRoomMessage?  @relation("ChatRoomMessageReply", fields: [replyToMessageId], references: [id], onDelete: SetNull)
+  replies        ChatRoomMessage[] @relation("ChatRoomMessageReply")
+
+  forwardedFromMessage ChatRoomMessage?  @relation("ChatRoomMessageForward", fields: [forwardedFromMessageId], references: [id], onDelete: SetNull)
+  forwardedCopies      ChatRoomMessage[] @relation("ChatRoomMessageForward")
+
+  reactions ChatRoomMessageReaction[]
+
+  @@index([roomId])
+  @@index([senderId])
+  @@index([createdAt])
+  @@index([replyToMessageId])
+  @@index([forwardedFromMessageId])
+}
+
+model ChatRoomMessageReaction {
+  id        Int      @id @default(autoincrement())
+  messageId Int
+  userId    Int
+  emoji     String
+  createdAt DateTime @default(now())
+
+  message ChatRoomMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@index([messageId])
+  @@index([userId])
+}
+
+model ChatRoomPresence {
+  id         Int      @id @default(autoincrement())
+  roomId     Int
+  userId     Int
+  joinedAt   DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+
+  room ChatRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([roomId, userId])
+  @@index([roomId])
+  @@index([userId])
+  @@index([lastSeenAt])
+}
+
+model FavoriteChatRoom {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  roomId    Int
+  createdAt DateTime @default(now())
+
+  user User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  room ChatRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roomId])
+  @@index([userId])
+  @@index([roomId])
+  @@index([createdAt])
+}
+
+model ChatRoomMute {
+  id          Int      @id @default(autoincrement())
+  roomId      Int
+  userId      Int
+  mutedById   Int
+  createdAt   DateTime @default(now())
+
+  room        ChatRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user        User     @relation("MutedUser", fields: [userId], references: [id], onDelete: Cascade)
+  mutedBy     User     @relation("MutedByUser", fields: [mutedById], references: [id], onDelete: Cascade)
+
+  @@unique([roomId, userId])
+  @@index([roomId])
+  @@index([userId])
+  @@index([mutedById])
+  @@index([createdAt])
 }

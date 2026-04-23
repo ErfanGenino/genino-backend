@@ -179,7 +179,7 @@ exports.login = async (req, res, prisma) => {
     console.error("Login error:", err);
     return res.status(500).json({
       ok: false,
-      message: "خطای داخلی سرور.",
+      message: err.message,
     });
   }
 };

@@ -3,6 +3,9 @@ const authMiddleware = require("../middleware/authMiddleware");
 const {
   createPresignedAvatarUpload,
   createPresignedMedicalAttachmentUpload,
+  createPresignedChatImageUpload,
+  createPresignedChatRoomImageUpload,
+  createPresignedChatVoiceUpload,
 } = require("../controllers/uploadController");
 
 module.exports = function () {
@@ -18,6 +21,24 @@ module.exports = function () {
     "/presign/medical-attachment",
     authMiddleware,
     createPresignedMedicalAttachmentUpload
+  );
+
+  router.post(
+    "/presign/chat-image",
+    authMiddleware,
+    createPresignedChatImageUpload
+  );
+
+  router.post(
+    "/presign/chat-room-image",
+    authMiddleware,
+    createPresignedChatRoomImageUpload
+  );
+
+  router.post(
+    "/presign/chat-voice",
+    authMiddleware,
+    createPresignedChatVoiceUpload
   );
 
   return router;

@@ -4,9 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-  "dev": "node server.js",
-  "env:local": "copy .env.local .env",
-  "env:prod": "copy .env.production .env"
+    "dev": "node server.js",
+    "env:local": "copy .env.local .env",
+    "env:prod": "copy .env.production .env"
   },
   "keywords": [],
   "author": "",
@@ -17,9 +17,12 @@
     "@prisma/client": "^6.19.0",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
-    "dotenv": "^17.2.3",
+    "dotenv": "^17.4.0",
     "express": "4.18.2",
     "jsonwebtoken": "^9.0.2",
+    "socket.io": "^4.8.3"
+  },
+  "devDependencies": {
     "prisma": "^6.19.0"
   }
 }

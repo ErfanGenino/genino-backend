@@ -31,6 +31,18 @@ function sanitizeContentType(ct) {
   return allowed.includes(v) ? v : null;
 }
 
+function sanitizeVoiceExt(ext) {
+  const cleaned = String(ext || "").toLowerCase().replace(".", "").trim();
+  const allowed = ["webm"];
+  return allowed.includes(cleaned) ? cleaned : null;
+}
+
+function sanitizeVoiceContentType(ct) {
+  const v = String(ct || "").toLowerCase().trim();
+  const allowed = ["audio/webm"];
+  return allowed.includes(v) ? v : null;
+}
+
 /**
  * POST /api/uploads/presign
  * body: { ext: "jpg"|"png"|"webp", contentType: "image/jpeg"|... }
@@ -208,5 +220,200 @@ exports.createPresignedMedicalAttachmentUpload = async (req, res) => {
   } catch (err) {
     console.error("PRESIGN MEDICAL ATTACHMENT ERROR:", err);
     return res.status(500).json({ ok: false, message: "خطای سرور در presign." });
+  }
+};
+
+exports.createPresignedChatImageUpload = async (req, res) => {
+  try {
+    const bucket = process.env.S3_BUCKET;
+    if (!bucket) {
+      return res
+        .status(500)
+        .json({ ok: false, message: "S3_BUCKET تنظیم نشده است." });
+    }
+
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ ok: false, message: "دسترسی غیرمجاز." });
+    }
+
+    const { ext, contentType, fileSize } = req.body || {};
+
+    const safeExt = sanitizeExt(ext);
+    const safeCT = sanitizeContentType(contentType);
+
+    if (!safeExt || !safeCT) {
+      return res.status(400).json({
+        ok: false,
+        message: "فرمت فایل مجاز نیست. فقط jpg / png / webp",
+      });
+    }
+
+    // محدودیت حجم (مثلاً 8MB بعد از فشرده‌سازی)
+    if (fileSize && fileSize > 8 * 1024 * 1024) {
+      return res.status(400).json({
+        ok: false,
+        message: "حجم تصویر بیش از حد مجاز است.",
+      });
+    }
+
+    const now = new Date();
+    const yyyy = String(now.getFullYear());
+    const mm = String(now.getMonth() + 1).padStart(2, "0");
+
+    const key = `chat-images/${userId}/${yyyy}/${mm}/${randomId(12)}.${safeExt}`;
+
+    const command = new PutObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      ContentType: safeCT,
+    });
+
+    const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 600 });
+
+    const publicUrl = `${process.env.S3_ENDPOINT}/${bucket}/${key}`;
+
+    return res.json({
+      ok: true,
+      uploadUrl,
+      key,
+      publicUrl,
+      expiresIn: 120,
+    });
+  } catch (err) {
+    console.error("PRESIGN CHAT IMAGE ERROR:", err);
+    return res
+      .status(500)
+      .json({ ok: false, message: "خطای سرور در presign چت." });
+  }
+};
+
+exports.createPresignedChatVoiceUpload = async (req, res) => {
+  try {
+    const bucket = process.env.S3_BUCKET;
+    if (!bucket) {
+      return res
+        .status(500)
+        .json({ ok: false, message: "S3_BUCKET تنظیم نشده است." });
+    }
+
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ ok: false, message: "دسترسی غیرمجاز." });
+    }
+
+    const { ext, contentType, fileSize } = req.body || {};
+
+    const safeExt = sanitizeVoiceExt(ext);
+    const safeCT = sanitizeVoiceContentType(contentType);
+
+    if (!safeExt || !safeCT) {
+      return res.status(400).json({
+        ok: false,
+        message: "فرمت فایل صوتی مجاز نیست. فقط webm",
+      });
+    }
+
+    // برای ویس ۳۰ ثانیه‌ای معمولاً حجم خیلی بالا نمی‌رود
+    // فعلاً سقف را 2MB می‌گذاریم
+    if (fileSize && fileSize > 2 * 1024 * 1024) {
+      return res.status(400).json({
+        ok: false,
+        message: "حجم پیام صوتی بیش از حد مجاز است.",
+      });
+    }
+
+    const now = new Date();
+    const yyyy = String(now.getFullYear());
+    const mm = String(now.getMonth() + 1).padStart(2, "0");
+
+    const key = `chat-voices/${userId}/${yyyy}/${mm}/${randomId(12)}.${safeExt}`;
+
+    const command = new PutObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      ContentType: safeCT,
+    });
+
+    const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 600 });
+    const publicUrl = `${process.env.S3_ENDPOINT}/${bucket}/${key}`;
+
+    return res.json({
+      ok: true,
+      uploadUrl,
+      key,
+      publicUrl,
+      expiresIn: 120,
+    });
+  } catch (err) {
+    console.error("PRESIGN CHAT VOICE ERROR:", err);
+    return res.status(500).json({
+      ok: false,
+      message: "خطای سرور در presign پیام صوتی.",
+    });
+  }
+};
+
+exports.createPresignedChatRoomImageUpload = async (req, res) => {
+  try {
+    const bucket = process.env.S3_BUCKET;
+    if (!bucket) {
+      return res
+        .status(500)
+        .json({ ok: false, message: "S3_BUCKET تنظیم نشده است." });
+    }
+
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ ok: false, message: "دسترسی غیرمجاز." });
+    }
+
+    const { ext, contentType, fileSize } = req.body || {};
+
+    const safeExt = sanitizeExt(ext);
+    const safeCT = sanitizeContentType(contentType);
+
+    if (!safeExt || !safeCT) {
+      return res.status(400).json({
+        ok: false,
+        message: "فرمت فایل مجاز نیست. فقط jpg / png / webp",
+      });
+    }
+
+    if (fileSize && fileSize > 8 * 1024 * 1024) {
+      return res.status(400).json({
+        ok: false,
+        message: "حجم تصویر بیش از حد مجاز است.",
+      });
+    }
+
+    const now = new Date();
+    const yyyy = String(now.getFullYear());
+    const mm = String(now.getMonth() + 1).padStart(2, "0");
+
+    const key = `chat-room-images/${userId}/${yyyy}/${mm}/${randomId(12)}.${safeExt}`;
+
+    const command = new PutObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      ContentType: safeCT,
+    });
+
+    const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 600 });
+    const publicUrl = `${process.env.S3_ENDPOINT}/${bucket}/${key}`;
+
+    return res.json({
+      ok: true,
+      uploadUrl,
+      key,
+      publicUrl,
+      expiresIn: 120,
+    });
+  } catch (err) {
+    console.error("PRESIGN CHAT ROOM IMAGE ERROR:", err);
+    return res.status(500).json({
+      ok: false,
+      message: "خطای سرور در presign عکس اتاق.",
+    });
   }
 };

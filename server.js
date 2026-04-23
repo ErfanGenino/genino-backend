@@ -1,13 +1,17 @@
 // server.js — Genino Backend Entry
 
 const dotenv = require("dotenv");
-dotenv.config({ override: true });
+dotenv.config();
 
 const express = require("express");
 const cors = require("cors");
 const { PrismaClient } = require("@prisma/client");
 const authMiddleware = require("./middleware/authMiddleware");
 const inspirationRoutes = require("./routes/inspiration");
+const { createServer } = require("http");
+const { Server } = require("socket.io");
+const { deactivateInactiveChatRooms, deleteExpiredRoomMessages } = require("./controllers/chatRoomController");
+const { deleteExpiredPrivateMessages } = require("./controllers/chatController");
 
 
 const app = express();
@@ -38,13 +42,11 @@ const corsOptions = {
   origin: function (origin, callback) {
     if (!origin) return callback(null, true);
 
-    // برای دیباگ
-    console.log("CORS ORIGIN:", origin);
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
 
-    if (allowedOrigins.includes(origin)) return callback(null, true);
-
-    // رد کن ولی Error نده تا قاطی نکنه
-    return callback(null, false);
+    return callback(null, true);
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
@@ -113,6 +115,9 @@ app.use("/api/chat", chatRoutes(prisma));
 const usersRoutes = require("./routes/users");
 app.use("/api/users", usersRoutes(prisma));
 
+const chatRoomsRoutes = require("./routes/chatRooms");
+app.use("/api/chat-rooms", chatRoomsRoutes(prisma));
+
 
 // --- Uploads Routes ---
 const uploadsRoutes = require("./routes/uploads");
@@ -131,7 +136,154 @@ app.get("/api/protected", authMiddleware, (req, res) => {
 });
 
 // --- Start Server ---
-app.listen(PORT, () => {
+const httpServer = createServer(app);
+
+const io = new Server(httpServer, {
+  cors: {
+    origin: ["http://localhost:5173", "http://127.0.0.1:5173"],
+    methods: ["GET", "POST"],
+    credentials: true,
+  },
+});
+
+// --- Auto deactivate inactive chat rooms ---
+const runInactiveChatRoomsCleanup = async () => {
+  console.log("⏳ Checking inactive chat rooms...");
+
+  const result = await deactivateInactiveChatRooms(prisma);
+
+  if (result?.ok) {
+    console.log(`🧹 Inactive rooms cleaned: ${result.count || 0}`);
+  } else {
+    console.log("❌ Failed to clean inactive rooms");
+  }
+};
+
+// --- Auto delete expired room messages ---
+const runExpiredRoomMessagesCleanup = async () => {
+  console.log("⏳ Checking expired room messages...");
+
+  const result = await deleteExpiredRoomMessages(prisma);
+
+  if (result?.ok) {
+    console.log(`🧹 Expired room messages deleted: ${result.count || 0}`);
+  } else {
+    console.log("❌ Failed to delete expired room messages");
+  }
+};
+
+// --- Auto delete expired private messages ---
+const runExpiredPrivateMessagesCleanup = async () => {
+  console.log("⏳ Checking expired private messages...");
+
+  const result = await deleteExpiredPrivateMessages(prisma);
+
+  if (result?.ok) {
+    console.log(`🧹 Expired private messages deleted: ${result.count || 0}`);
+  } else {
+    console.log("❌ Failed to delete expired private messages");
+  }
+};
+
+runInactiveChatRoomsCleanup();
+runExpiredRoomMessagesCleanup();
+runExpiredPrivateMessagesCleanup();
+
+setInterval(runInactiveChatRoomsCleanup, 6 * 60 * 60 * 1000); // هر 6 ساعت
+setInterval(runExpiredRoomMessagesCleanup, 6 * 60 * 60 * 1000); // هر 6 ساعت
+setInterval(runExpiredPrivateMessagesCleanup, 6 * 60 * 60 * 1000); // هر 6 ساعت
+
+io.on("connection", (socket) => {
+  console.log("🟢 Socket connected:", socket.id);
+
+  socket.on("join_room", ({ roomId, userId }) => {
+  const roomKey = `chat-room-${roomId}`;
+
+  socket.data.roomId = roomId;
+  socket.data.userId = userId;
+  socket.data.roomKey = roomKey;
+
+  socket.join(roomKey);
+
+  console.log("📥 join_room:", {
+    socketId: socket.id,
+    roomId,
+    userId,
+    roomKey,
+  });
+
+  io.emit("room_presence_updated", {
+    roomId,
+    userId,
+    message: "user joined room",
+  });
+});
+
+socket.on("send_room_message", ({ roomId, message }) => {
+  const roomKey = `chat-room-${roomId}`;
+
+  socket.to(roomKey).emit("receive_room_message", {
+  message,
+});
+});
+
+socket.on("delete_room_message", ({ roomId, messageId }) => {
+  const roomKey = `chat-room-${roomId}`;
+
+  socket.to(roomKey).emit("room_message_deleted", {
+    roomId,
+    messageId,
+  });
+});
+
+socket.on("react_room_message", ({ roomId, messageId, reactions }) => {
+  const roomKey = `chat-room-${roomId}`;
+
+  socket.to(roomKey).emit("room_message_reacted", {
+    roomId,
+    messageId,
+    reactions,
+  });
+});
+
+socket.on("typing_room", ({ roomId, userId, name }) => {
+  const roomKey = `chat-room-${roomId}`;
+
+  socket.to(roomKey).emit("room_user_typing", {
+    roomId,
+    userId,
+    name,
+  });
+});
+
+
+socket.on("disconnect", async () => {
+  console.log("🔴 Socket disconnected:", socket.id);
+
+  if (socket.data?.roomId && socket.data?.userId) {
+    try {
+      await prisma.chatRoomPresence.deleteMany({
+        where: {
+          roomId: Number(socket.data.roomId),
+          userId: Number(socket.data.userId),
+        },
+      });
+    } catch (err) {
+      console.error("SOCKET PRESENCE DELETE ERROR:", err);
+    }
+  }
+
+  if (socket.data?.roomKey && socket.data?.roomId) {
+    io.emit("room_presence_updated", {
+      roomId: socket.data.roomId,
+      userId: socket.data.userId || null,
+      message: "user left room",
+    });
+  }
+});
+});
+
+httpServer.listen(PORT, () => {
   console.log(`🚀 Genino backend running on port ${PORT}`);
 });
 

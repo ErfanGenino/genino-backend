@@ -4,6 +4,8 @@ const {
   listConversations,
   getConversation,
   sendMessage,
+  deleteMessage,
+  reactToMessage,
 } = require("../controllers/chatController");
 
 module.exports = function (prisma) {
@@ -19,6 +21,14 @@ module.exports = function (prisma) {
 
   router.post("/:userId/messages", authMiddleware, (req, res) =>
     sendMessage(req, res, prisma)
+  );
+
+  router.delete("/messages/:messageId", authMiddleware, (req, res) =>
+   deleteMessage(req, res, prisma)
+  );
+
+  router.post("/messages/:messageId/reaction", authMiddleware, (req, res) =>
+   reactToMessage(req, res, prisma)
   );
 
   return router;
