@@ -4,3 +4,5 @@ prisma/.env
 npm-debug.log
 dist/
 coverage/
+.env.local
+.env.production

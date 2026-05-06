@@ -1,7 +1,10 @@
 // server.js — Genino Backend Entry
 
-const dotenv = require("dotenv");
-dotenv.config();
+try {
+  require("dotenv").config();
+} catch (err) {
+  console.log("dotenv not found, using runtime environment variables.");
+}
 
 const express = require("express");
 const cors = require("cors");
@@ -105,6 +108,14 @@ app.use("/api/my-cycle", myCycleRoutes(prisma));
 const womenHealthRoutes = require("./routes/womenHealth");
 app.use("/api/women-health", womenHealthRoutes(prisma));
 
+// --- Men Health Routes ---
+const menHealthRoutes = require("./routes/menHealth");
+app.use("/api/men-health", menHealthRoutes(prisma));
+
+// --- Calorie Tracker Routes ---
+const calorieTrackerRoutes = require("./routes/calorieTracker");
+app.use("/api/calorie-tracker", calorieTrackerRoutes(prisma));
+
 // --- Medical Records Routes ---
 const medicalRecordsRoutes = require("./routes/medicalRecords");
 app.use("/api/medical-records", medicalRecordsRoutes(prisma));
@@ -140,8 +151,8 @@ const httpServer = createServer(app);
 
 const io = new Server(httpServer, {
   cors: {
-    origin: ["http://localhost:5173", "http://127.0.0.1:5173"],
-    methods: ["GET", "POST"],
+    origin: allowedOrigins,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     credentials: true,
   },
 });
@@ -283,7 +294,7 @@ socket.on("disconnect", async () => {
 });
 });
 
-httpServer.listen(PORT, () => {
+httpServer.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 Genino backend running on port ${PORT}`);
 });
 
