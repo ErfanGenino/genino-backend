@@ -6,6 +6,7 @@ const {
   createPresignedChatImageUpload,
   createPresignedChatRoomImageUpload,
   createPresignedChatVoiceUpload,
+  createPresignedMemoryAlbumPhotoUpload,
 } = require("../controllers/uploadController");
 
 module.exports = function () {
@@ -40,6 +41,12 @@ module.exports = function () {
     authMiddleware,
     createPresignedChatVoiceUpload
   );
+
+  router.post(
+  "/presign/memory-album-photo",
+  authMiddleware,
+  createPresignedMemoryAlbumPhotoUpload
+);
 
   return router;
 };

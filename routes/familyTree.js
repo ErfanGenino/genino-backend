@@ -98,6 +98,7 @@ router.get("/:childId/members", authMiddleware, async (req, res) => {
             id: true,
             fullName: true,
             email: true,
+            avatarUrl: true,
           },
         },
       },

@@ -13,16 +13,16 @@ module.exports = function (prisma) {
   router.post("/", authMiddleware, async (req, res) => {
     try {
       const userId = req.user.userId;
-      const { childId, email, phone, relationType, slot, roleLabel } = req.body;
+      const { childId, email, phone, username, relationType, slot, roleLabel } = req.body;
 
       // 1) اعتبارسنجی پایه
       if (!childId) {
         return res.status(400).json({ ok: false, message: "childId الزامی است." });
       }
-      if (!email && !phone) {
+      if (!email && !phone && !username) {
         return res.status(400).json({
           ok: false,
-          message: "ایمیل یا شماره موبایل الزامی است.",
+          message: "ایمیل، شماره موبایل یا نام کاربری الزامی است.",
         });
       }
 
@@ -82,12 +82,25 @@ module.exports = function (prisma) {
 
       // 2) بررسی ادمین بودن کاربر (فقط پدر/مادر)
       const admin = await prisma.childAdmin.findFirst({
-        where: {
-          childId: Number(childId),
-          userId,
-          role: { in: ["father", "mother"] },
-        },
-      });
+  where: {
+    childId: Number(childId),
+    userId,
+    role: { in: ["father", "mother"] },
+  },
+  include: {
+    user: {
+      select: {
+        fullName: true,
+        gender: true,
+      },
+    },
+    child: {
+      select: {
+        fullName: true,
+      },
+    },
+  },
+});
 
 
       if (!admin) {
@@ -97,13 +110,53 @@ module.exports = function (prisma) {
         });
       }
 
+      // پیدا کردن کاربر مقصد اگر با نام کاربری، موبایل یا ایمیل عضو ژنینو باشد
+      let targetUser = null;
+
+      if (username || phone || email) {
+        targetUser = await prisma.user.findFirst({
+          where: {
+            OR: [
+              username ? { username: String(username).trim() } : undefined,
+              phone ? { phone: String(phone).trim() } : undefined,
+              email ? { email: String(email).trim() } : undefined,
+            ].filter(Boolean),
+          },
+          select: {
+            id: true,
+            fullName: true,
+            username: true,
+            email: true,
+            phone: true,
+          },
+        });
+      }
+
+      if (!targetUser?.id) {
+        return res.status(404).json({
+          ok: false,
+          message: "کاربری با این مشخصات در ژنینو پیدا نشد.",
+        });
+      }
+
+      if (targetUser?.id === userId) {
+        return res.status(400).json({
+          ok: false,
+          message: "نمی‌توانید برای خودتان دعوت ارسال کنید.",
+        });
+      }
+
       // 3) جلوگیری از دعوت فعال تکراری (برای همان کودک و همان مقصد)
       const existingInvite = await prisma.childInvitation.findFirst({
         where: {
           childId: Number(childId),
           accepted: false,
           expiresAt: { gt: new Date() },
-          OR: [email ? { email } : undefined, phone ? { phone } : undefined].filter(Boolean),
+          OR: [
+            email ? { email: String(email).trim() } : undefined,
+            phone ? { phone: String(phone).trim() } : undefined,
+            targetUser?.id ? { targetUserId: targetUser.id } : undefined,
+          ].filter(Boolean),
         },
       });
 
@@ -124,8 +177,9 @@ module.exports = function (prisma) {
         data: {
           childId: Number(childId),
           inviterId: userId,
-          email: email || null,
-          phone: phone || null,
+          targetUserId: targetUser?.id || null,
+          email: email || targetUser?.email || null,
+          phone: phone || targetUser?.phone || null,
           token,
           expiresAt,
 
@@ -135,6 +189,35 @@ module.exports = function (prisma) {
           roleLabel: roleLabel ? String(roleLabel).trim() : null,
         },
       });
+
+
+      if (targetUser?.id) {
+  const inviterTitle = admin.role === "father" ? "آقای" : "خانم";
+  const inviterName = admin.user?.fullName || "کاربر ژنینو";
+  const childName = admin.child?.fullName || "کودک";
+  const roleText =
+    relationType === "mother"
+      ? "مادر"
+      : relationType === "father"
+      ? "پدر"
+      : roleLabel || "عضو خانواده";
+
+  await prisma.notification.create({
+    data: {
+      userId: targetUser.id,
+      type: "child_invitation",
+      title: "دعوت به پروفایل کودک",
+      body: `${inviterTitle} ${inviterName} شما را به عنوان ${roleText} ${childName} به پروفایل ${childName} دعوت کرده است.`,
+      data: {
+        invitationId: invitation.id,
+        token: invitation.token,
+        childId: invitation.childId,
+        relationType: invitation.relationType,
+        slot: invitation.slot,
+      },
+    },
+  });
+}
 
       // ⚠️ در prod بهتره token برنگرده؛ فعلاً برای تست accept، برمی‌گردونیم
       return res.status(201).json({
@@ -191,6 +274,13 @@ module.exports = function (prisma) {
         });
       }
 
+      if (invitation.targetUserId && invitation.targetUserId !== userId) {
+        return res.status(403).json({
+          ok: false,
+          message: "این دعوت متعلق به شما نیست.",
+        });
+      }
+
       const exists = await prisma.childAdmin.findFirst({
         where: {
           childId: invitation.childId,
@@ -229,6 +319,49 @@ module.exports = function (prisma) {
         },
       });
 
+      // حذف اعلان دعوت از نوتیف گیرنده
+await prisma.notification.deleteMany({
+  where: {
+    type: "child_invitation",
+    data: {
+      path: ["invitationId"],
+      equals: invitation.id,
+    },
+  },
+});
+
+// اطلاعات کاربر پذیرنده
+const accepter = await prisma.user.findUnique({
+  where: { id: userId },
+  select: {
+    fullName: true,
+  },
+});
+
+// اطلاعات کودک
+const childInfo = await prisma.child.findUnique({
+  where: { id: invitation.childId },
+  select: {
+    fullName: true,
+  },
+});
+
+// نوتیف برای دعوت‌کننده
+await prisma.notification.create({
+  data: {
+    userId: invitation.inviterId,
+    type: "child_invitation_accepted",
+    title: "دعوت پذیرفته شد",
+    body: `${accepter?.fullName || "کاربر ژنینو"} دعوت شما برای ${childInfo?.fullName || "کودک"} را پذیرفت.`,
+    data: {
+      invitationId: invitation.id,
+      childId: invitation.childId,
+      relationType: invitation.relationType,
+      slot: invitation.slot,
+    },
+  },
+});
+
       return res.json({
         ok: true,
         message: "دعوت با موفقیت پذیرفته شد.",
@@ -244,6 +377,107 @@ module.exports = function (prisma) {
       });
     }
   });
+
+
+  // ===============================
+// POST /api/invitations/reject
+// body: { token }
+// ===============================
+router.post("/reject", authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { token } = req.body;
+
+    if (!token) {
+      return res.status(400).json({
+        ok: false,
+        message: "توکن دعوت ارسال نشده است.",
+      });
+    }
+
+    const invitation = await prisma.childInvitation.findUnique({
+      where: { token },
+    });
+
+    if (!invitation) {
+      return res.status(404).json({
+        ok: false,
+        message: "دعوت معتبر نیست.",
+      });
+    }
+
+    if (invitation.targetUserId && invitation.targetUserId !== userId) {
+      return res.status(403).json({
+        ok: false,
+        message: "این دعوت متعلق به شما نیست.",
+      });
+    }
+
+    if (invitation.accepted) {
+      return res.status(409).json({
+        ok: false,
+        message: "این دعوت قبلاً پذیرفته شده است.",
+      });
+    }
+
+    // ✅ حذف اعلان مربوط به این دعوت برای طرف مقابل
+await prisma.notification.deleteMany({
+  where: {
+    type: "child_invitation",
+    data: {
+      path: ["invitationId"],
+      equals: invitation.id,
+    },
+  },
+});
+
+const rejecter = await prisma.user.findUnique({
+  where: { id: userId },
+  select: {
+    fullName: true,
+  },
+});
+
+const childInfo = await prisma.child.findUnique({
+  where: { id: invitation.childId },
+  select: {
+    fullName: true,
+  },
+});
+
+await prisma.notification.create({
+  data: {
+    userId: invitation.inviterId,
+    type: "child_invitation_rejected",
+    title: "دعوت رد شد",
+    body: `${rejecter?.fullName || "کاربر ژنینو"} دعوت شما برای ${childInfo?.fullName || "کودک"} را رد کرد.`,
+    data: {
+      invitationId: invitation.id,
+      childId: invitation.childId,
+      relationType: invitation.relationType,
+      slot: invitation.slot,
+    },
+  },
+});
+
+    await prisma.childInvitation.delete({
+      where: { id: invitation.id },
+    });
+
+    return res.json({
+      ok: true,
+      message: "دعوت رد شد.",
+    });
+  } catch (error) {
+    console.error("❌ Reject invitation error:", error);
+    return res.status(500).json({
+      ok: false,
+      message: "خطای سرور در رد دعوت.",
+    });
+  }
+});
+
+
 
     // ===============================
   // DELETE /api/invitations/:invitationId (لغو/حذف دعوت Pending)
@@ -282,6 +516,20 @@ module.exports = function (prisma) {
       if (!admin) {
         return res.status(403).json({ ok: false, message: "شما اجازه لغو این دعوت را ندارید." });
       }
+
+// حذف اعلان دعوت از نوتیف گیرنده
+const deletedNotifications = await prisma.notification.deleteMany({
+  where: {
+    userId: invitation.targetUserId,
+    type: "child_invitation",
+    data: {
+      path: ["childId"],
+      equals: invitation.childId,
+    },
+  },
+});
+
+console.log("Deleted invitation notifications:", deletedNotifications.count);
 
       await prisma.childInvitation.delete({
         where: { id: invitationId },

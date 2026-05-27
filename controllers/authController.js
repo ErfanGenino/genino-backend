@@ -217,7 +217,9 @@ exports.getProfile = async (req, res, prisma) => {
     city: user.city,
     lifeStage: user.lifeStage || "user",
     createdAt: user.createdAt,
-    avatarUrl: user.avatarUrl,
+    avatarUrl: user.avatarUrl
+  ? `${user.avatarUrl}?v=${user.updatedAt.getTime()}`
+  : null,
     nationalCode: user.nationalCode,
     addresses: user.addresses || [],
   },
@@ -512,7 +514,9 @@ if (updatedCount.count === 0) {
         city: updated.city,
         lifeStage: updated.lifeStage || "user",
         createdAt: updated.createdAt,
-        avatarUrl: updated.avatarUrl,
+        avatarUrl: updated.avatarUrl
+  ? `${updated.avatarUrl}?v=${updated.updatedAt.getTime()}`
+  : null,
         nationalCode: updated.nationalCode,
         addresses: updated.addresses || [],
       },

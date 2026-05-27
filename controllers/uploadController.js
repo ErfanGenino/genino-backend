@@ -31,6 +31,51 @@ function sanitizeContentType(ct) {
   return allowed.includes(v) ? v : null;
 }
 
+function sanitizeAlbumPhotoExt(ext) {
+  const cleaned = String(ext || "")
+    .toLowerCase()
+    .replace(".", "")
+    .trim();
+
+  const allowed = [
+    "jpg",
+    "jpeg",
+    "png",
+    "webp",
+    "heic",
+    "heif",
+    "gif",
+  ];
+
+  return allowed.includes(cleaned) ? cleaned : null;
+}
+
+function sanitizeAlbumPhotoContentType(ct, ext) {
+  const v = String(ct || "").toLowerCase().trim();
+  const safeExt = String(ext || "").toLowerCase().replace(".", "").trim();
+
+  const allowed = [
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/heic",
+    "image/heif",
+    "image/gif",
+  ];
+
+  if (allowed.includes(v)) return v;
+
+  // اگر گوشی contentType نفرستاد، از روی پسوند حدس می‌زنیم
+  if (safeExt === "jpg" || safeExt === "jpeg") return "image/jpeg";
+  if (safeExt === "png") return "image/png";
+  if (safeExt === "webp") return "image/webp";
+  if (safeExt === "heic") return "image/heic";
+  if (safeExt === "heif") return "image/heif";
+  if (safeExt === "gif") return "image/gif";
+
+  return null;
+}
+
 function sanitizeVoiceExt(ext) {
   const cleaned = String(ext || "").toLowerCase().replace(".", "").trim();
   const allowed = ["webm"];
@@ -414,6 +459,131 @@ exports.createPresignedChatRoomImageUpload = async (req, res) => {
     return res.status(500).json({
       ok: false,
       message: "خطای سرور در presign عکس اتاق.",
+    });
+  }
+};
+
+exports.createPresignedMemoryAlbumPhotoUpload = async (req, res) => {
+  try {
+    const bucket = process.env.S3_BUCKET;
+
+    if (!bucket) {
+      return res.status(500).json({
+        ok: false,
+        message: "S3_BUCKET تنظیم نشده است.",
+      });
+    }
+
+    const userId = req.user?.userId;
+
+    if (!userId) {
+      return res.status(401).json({
+        ok: false,
+        message: "دسترسی غیرمجاز.",
+      });
+    }
+
+    const { albumId, ext, contentType, fileName, fileSize } = req.body || {};
+    const aid = Number(albumId);
+
+    if (!aid || Number.isNaN(aid)) {
+      return res.status(400).json({
+        ok: false,
+        message: "albumId نامعتبر است.",
+      });
+    }
+
+    const album = await req.prisma.memoryAlbum.findFirst({
+  where: {
+    id: aid,
+  },
+  select: {
+    id: true,
+    childId: true,
+  },
+});
+
+if (!album) {
+  return res.status(404).json({
+    ok: false,
+    message: "آلبوم یافت نشد.",
+  });
+}
+
+const isParent = await req.prisma.childAdmin.findFirst({
+  where: {
+    childId: album.childId,
+    userId,
+    status: "CONNECTED",
+    role: {
+      in: ["father", "mother"],
+    },
+  },
+  select: { id: true },
+});
+
+if (!isParent) {
+  return res.status(403).json({
+    ok: false,
+    message: "فقط پدر یا مادر کودک می‌توانند عکس اضافه کنند.",
+  });
+}
+      
+
+    const safeExt = sanitizeAlbumPhotoExt(ext);
+    const safeCT = sanitizeAlbumPhotoContentType(contentType, ext);
+
+    if (!safeExt || !safeCT) {
+      return res.status(400).json({
+        ok: false,
+        message:
+  "فرمت تصویر مجاز نیست. فرمت‌های رایج موبایل مثل jpg / png / webp / heic / heif / gif پشتیبانی می‌شوند.",
+      });
+    }
+
+    if (fileSize && fileSize > 8 * 1024 * 1024) {
+      return res.status(400).json({
+        ok: false,
+        message: "حجم تصویر بیش از حد مجاز است.",
+      });
+    }
+
+    const now = new Date();
+    const yyyy = String(now.getFullYear());
+    const mm = String(now.getMonth() + 1).padStart(2, "0");
+
+    const key = `memory-albums/${album.childId}/${aid}/${yyyy}/${mm}/${randomId(
+  12
+)}.${safeExt}`;
+
+    const command = new PutObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      ContentType: safeCT,
+      Metadata: {
+        userId: String(userId),
+        childId: String(album.childId),
+        albumId: String(aid),
+        originalName: fileName ? String(fileName).slice(0, 200) : "",
+      },
+    });
+
+    const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 600 });
+    const publicUrl = `${process.env.S3_ENDPOINT}/${bucket}/${key}`;
+
+    return res.json({
+      ok: true,
+      uploadUrl,
+      key,
+      publicUrl,
+      expiresIn: 120,
+    });
+  } catch (err) {
+    console.error("PRESIGN MEMORY ALBUM PHOTO ERROR:", err);
+
+    return res.status(500).json({
+      ok: false,
+      message: "خطای سرور در presign عکس آلبوم خاطرات.",
     });
   }
 };

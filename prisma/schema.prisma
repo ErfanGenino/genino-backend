@@ -10,61 +10,73 @@ datasource db {
 }
 
 model User {
-  id                   Int                       @id @default(autoincrement())
-  firstName            String
-  lastName             String
-  fullName             String?
-  username             String?                   @unique
-  nationalCode         String?                   @unique
-  email                String                    @unique
-  phone                String?                   @unique
-  password             String
-  gender               String?
-  birthDate            DateTime?
-  province             String?
-  city                 String?
-  createdAt            DateTime                  @default(now())
-  updatedAt            DateTime                  @updatedAt
-  lifeStage            String?                   @default("user")
-  avatarUrl            String?
-  lastSocialSeenAt     DateTime?
-  childAdmins          ChildAdmin[]
-  invitations          ChildInvitation[]
-  inspirationActions   InspirationAction[]
-  medicalRecords       MedicalRecord[]
-  reminders            Reminder[]
-  savedArticles        SavedArticle[]
-  addresses            UserAddress[]
-  womenCycle           WomenCycle?
-  womenHealthReports   WomenHealthReport[]
-  menHealthReports     MenHealthReport[]
-  calorieTracker       CalorieTracker?
-  calorieProfiles      CalorieProfile[]
-  calorieDailyLogs     CalorieDailyLog[]
-  conversationsAsUser1 Conversation[]            @relation("ConversationUser1")
-  conversationsAsUser2 Conversation[]            @relation("ConversationUser2")
-  sentMessages         Message[]                 @relation("MessageSender")
-  messageReactions     MessageReaction[]
-  sentChatRoomMessages ChatRoomMessage[]         @relation("ChatRoomMessageSender")
-  chatRoomReactions    ChatRoomMessageReaction[]
-  chatRoomPresences    ChatRoomPresence[]
-  createdChatRooms     ChatRoom[]
-  favoriteChatRooms    FavoriteChatRoom[]
-  chatRoomMutes        ChatRoomMute[] @relation("MutedUser")
-  issuedChatRoomMutes  ChatRoomMute[] @relation("MutedByUser")
+  id                       Int                       @id @default(autoincrement())
+  firstName                String
+  lastName                 String
+  fullName                 String?
+  username                 String?                   @unique
+  nationalCode             String?                   @unique
+  email                    String                    @unique
+  phone                    String?                   @unique
+  password                 String
+  gender                   String?
+  birthDate                DateTime?
+  province                 String?
+  city                     String?
+  createdAt                DateTime                  @default(now())
+  updatedAt                DateTime                  @updatedAt
+  lifeStage                String?                   @default("user")
+  avatarUrl                String?
+  lastSocialSeenAt         DateTime?
+  childAdmins              ChildAdmin[]
+  invitations              ChildInvitation[]
+  receivedChildInvitations ChildInvitation[]         @relation("ChildInvitationTarget")
+  notifications            Notification[]
+  inspirationActions       InspirationAction[]
+  medicalRecords           MedicalRecord[]
+  reminders                Reminder[]
+  savedArticles            SavedArticle[]
+  addresses                UserAddress[]
+  womenCycle               WomenCycle?
+  womenHealthReports       WomenHealthReport[]
+  menHealthReports         MenHealthReport[]
+  calorieTracker           CalorieTracker?
+  calorieProfiles          CalorieProfile[]
+  calorieDailyLogs         CalorieDailyLog[]
+  conversationsAsUser1     Conversation[]            @relation("ConversationUser1")
+  conversationsAsUser2     Conversation[]            @relation("ConversationUser2")
+  sentMessages             Message[]                 @relation("MessageSender")
+  messageReactions         MessageReaction[]
+  sentChatRoomMessages     ChatRoomMessage[]         @relation("ChatRoomMessageSender")
+  chatRoomReactions        ChatRoomMessageReaction[]
+  chatRoomPresences        ChatRoomPresence[]
+  createdChatRooms         ChatRoom[]
+  favoriteChatRooms        FavoriteChatRoom[]
+  chatRoomMutes            ChatRoomMute[]            @relation("MutedUser")
+  issuedChatRoomMutes      ChatRoomMute[]            @relation("MutedByUser")
+  memoryAlbums             MemoryAlbum[]
+  memoryAlbumLikes         MemoryAlbumLike[]
+  memoryAlbumComments      MemoryAlbumComment[]
+  childFollowRequests      ChildFollowRequest[]
+  childAchievements        ChildAchievement[]
 }
 
 model Child {
-  id          Int               @id @default(autoincrement())
-  fullName    String?
-  gender      String?
-  birthDate   DateTime?
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
-  admins      ChildAdmin[]
-  invitations ChildInvitation[]
-  growth      GrowthMetric[]
-  testResults TestResult[]
+  id                Int                  @id @default(autoincrement())
+  fullName          String?
+  gender            String?
+  birthDate         DateTime?
+  photo             String?
+  interests         String?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  admins            ChildAdmin[]
+  invitations       ChildInvitation[]
+  growth            GrowthMetric[]
+  testResults       TestResult[]
+  memoryAlbums      MemoryAlbum[]
+  followRequests    ChildFollowRequest[]
+  childAchievements ChildAchievement[]
 }
 
 model GrowthMetric {
@@ -118,15 +130,21 @@ model SavedArticle {
 }
 
 model ChildAdmin {
-  id        Int      @id @default(autoincrement())
-  childId   Int
-  userId    Int
-  role      String
-  isPrimary Boolean  @default(false)
-  createdAt DateTime @default(now())
-  slot      Int      @default(0)
-  child     Child    @relation(fields: [childId], references: [id], onDelete: Cascade)
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id            Int       @id @default(autoincrement())
+  childId       Int
+  userId        Int
+  role          String
+  requestedRole String?
+  status        String    @default("CONNECTED")
+  isPrimary     Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  approvedAt    DateTime?
+  rejectedAt    DateTime?
+  approvedById  Int?
+  slot          Int       @default(0)
+
+  child Child @relation(fields: [childId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([childId, userId])
   @@unique([childId, role, slot])
@@ -146,14 +164,79 @@ model ChildInvitation {
   relationType String    @default("relative")
   roleLabel    String?
   slot         Int       @default(0)
-  child        Child     @relation(fields: [childId], references: [id], onDelete: Cascade)
-  inviter      User?     @relation(fields: [inviterId], references: [id])
+  targetUserId Int?
+
+  child      Child @relation(fields: [childId], references: [id], onDelete: Cascade)
+  inviter    User? @relation(fields: [inviterId], references: [id])
+  targetUser User? @relation("ChildInvitationTarget", fields: [targetUserId], references: [id])
 
   @@index([childId])
   @@index([inviterId])
   @@index([email])
   @@index([phone])
   @@index([relationType])
+  @@index([targetUserId])
+}
+
+model ChildFollowRequest {
+  id            Int      @id @default(autoincrement())
+  childId       Int
+  requesterId   Int
+  requestedRole String
+  approvedRole  String?
+  status        String   @default("PENDING_PARENT")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  child     Child @relation(fields: [childId], references: [id], onDelete: Cascade)
+  requester User  @relation(fields: [requesterId], references: [id], onDelete: Cascade)
+
+  @@unique([childId, requesterId, requestedRole])
+  @@index([childId])
+  @@index([requesterId])
+  @@index([status])
+}
+
+model ChildAchievement {
+  id Int @id @default(autoincrement())
+
+  childId      Int
+  issuerUserId Int
+
+  category    String
+  title       String
+  description String?
+
+  issuerRole String?
+
+  issuedAt  DateTime @default(now())
+  createdAt DateTime @default(now())
+
+  child      Child @relation(fields: [childId], references: [id], onDelete: Cascade)
+  issuerUser User  @relation(fields: [issuerUserId], references: [id], onDelete: Cascade)
+
+  @@index([childId])
+  @@index([issuerUserId])
+  @@index([category])
+  @@index([issuedAt])
+}
+
+model Notification {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  type      String
+  title     String
+  body      String?
+  data      Json?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, read])
+  @@index([createdAt])
+  @@index([type])
 }
 
 model UserAddress {
@@ -367,15 +450,15 @@ model MessageReaction {
 }
 
 model ChatRoom {
-  id          Int      @id @default(autoincrement())
+  id          Int                @id @default(autoincrement())
   title       String
   description String?
   imageUrl    String?
   creatorId   Int?
-  creator     User?    @relation(fields: [creatorId], references: [id], onDelete: Cascade)
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  creator     User?              @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  isActive    Boolean            @default(true)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
   favoritedBy FavoriteChatRoom[]
   mutes       ChatRoomMute[]
 
@@ -470,15 +553,15 @@ model FavoriteChatRoom {
 }
 
 model ChatRoomMute {
-  id          Int      @id @default(autoincrement())
-  roomId      Int
-  userId      Int
-  mutedById   Int
-  createdAt   DateTime @default(now())
+  id        Int      @id @default(autoincrement())
+  roomId    Int
+  userId    Int
+  mutedById Int
+  createdAt DateTime @default(now())
 
-  room        ChatRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
-  user        User     @relation("MutedUser", fields: [userId], references: [id], onDelete: Cascade)
-  mutedBy     User     @relation("MutedByUser", fields: [mutedById], references: [id], onDelete: Cascade)
+  room    ChatRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user    User     @relation("MutedUser", fields: [userId], references: [id], onDelete: Cascade)
+  mutedBy User     @relation("MutedByUser", fields: [mutedById], references: [id], onDelete: Cascade)
 
   @@unique([roomId, userId])
   @@index([roomId])
@@ -488,13 +571,13 @@ model ChatRoomMute {
 }
 
 model CalorieTracker {
-  id          Int      @id @default(autoincrement())
-  userId      Int      @unique
-  startDate   String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        Int      @id @default(autoincrement())
+  userId    Int      @unique
+  startDate String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
@@ -539,4 +622,71 @@ model CalorieDailyLog {
   @@unique([userId, dateKey])
   @@index([userId])
   @@index([userId, dateKey])
+}
+
+model MemoryAlbum {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  childId     Int
+  title       String
+  description String?
+  coverUrl    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user     User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  child    Child                @relation(fields: [childId], references: [id], onDelete: Cascade)
+  photos   MemoryAlbumPhoto[]
+  likes    MemoryAlbumLike[]
+  comments MemoryAlbumComment[]
+
+  @@index([userId])
+  @@index([childId])
+  @@index([userId, childId])
+  @@index([createdAt])
+}
+
+model MemoryAlbumPhoto {
+  id        Int      @id @default(autoincrement())
+  albumId   Int
+  url       String
+  fileName  String?
+  mimeType  String?
+  fileSize  Int?
+  caption   String?
+  createdAt DateTime @default(now())
+
+  album MemoryAlbum @relation(fields: [albumId], references: [id], onDelete: Cascade)
+
+  @@index([albumId])
+  @@index([createdAt])
+}
+
+model MemoryAlbumLike {
+  id        Int      @id @default(autoincrement())
+  albumId   Int
+  userId    Int
+  createdAt DateTime @default(now())
+
+  album MemoryAlbum @relation(fields: [albumId], references: [id], onDelete: Cascade)
+  user  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([albumId, userId])
+  @@index([albumId])
+  @@index([userId])
+}
+
+model MemoryAlbumComment {
+  id        Int      @id @default(autoincrement())
+  albumId   Int
+  userId    Int
+  text      String
+  createdAt DateTime @default(now())
+
+  album MemoryAlbum @relation(fields: [albumId], references: [id], onDelete: Cascade)
+  user  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([albumId])
+  @@index([userId])
+  @@index([createdAt])
 }

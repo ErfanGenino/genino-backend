@@ -92,9 +92,17 @@ app.use("/api/children", childrenRoutes(prisma));
 const invitationsRoutes = require("./routes/invitations");
 app.use("/api/invitations", invitationsRoutes(prisma));
 
+// --- Notifications Routes ---
+const notificationsRoutes = require("./routes/notifications");
+app.use("/api/notifications", notificationsRoutes(prisma));
+
 // --- FamilyTree Routes ---
 const familyTreeRoutes = require("./routes/familyTree");
 app.use("/api/family-tree", familyTreeRoutes(prisma));
+
+// --- Child Follow Requests Routes ---
+const childFollowRequestsRoutes = require("./routes/childFollowRequests");
+app.use("/api/child-follow-requests", childFollowRequestsRoutes(prisma));
 
 // --- Reminders Routes ---
 const remindersRoutes = require("./routes/reminders");
@@ -129,6 +137,10 @@ app.use("/api/users", usersRoutes(prisma));
 const chatRoomsRoutes = require("./routes/chatRooms");
 app.use("/api/chat-rooms", chatRoomsRoutes(prisma));
 
+// --- Memory Albums Routes ---
+const memoryAlbumsRoutes = require("./routes/memoryAlbums");
+app.use("/api/memory-albums", memoryAlbumsRoutes(prisma));
+
 
 // --- Uploads Routes ---
 const uploadsRoutes = require("./routes/uploads");
@@ -136,6 +148,9 @@ app.use("/api/uploads", uploadsRoutes());
 
 // ✅ Inspiration Routes (قبل از listen)
 app.use("/api/inspiration", inspirationRoutes(prisma));
+
+const childAchievementsRoutes = require("./routes/childAchievements");
+app.use("/api/child-achievements", childAchievementsRoutes(prisma));
 
 // --- Protected Test Route ---
 app.get("/api/protected", authMiddleware, (req, res) => {
@@ -297,5 +312,7 @@ socket.on("disconnect", async () => {
 httpServer.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 Genino backend running on port ${PORT}`);
 });
+
+
 
 
