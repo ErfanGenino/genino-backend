@@ -9,15 +9,41 @@ exports.listMedicalRecords = async (req, res, prisma) => {
       return res.status(401).json({ ok: false, message: "دسترسی غیرمجاز." });
     }
 
-    const items = await prisma.medicalRecord.findMany({
-      where: { userId },
-      orderBy: { recordDate: "desc" },
-      include: {
-        attachments: {
-          orderBy: { id: "asc" },
-        },
+    const childId = req.query.childId ? Number(req.query.childId) : null;
+
+if (childId) {
+  const admin = await prisma.childAdmin.findFirst({
+    where: {
+      childId,
+      userId,
+      status: "CONNECTED",
+      role: {
+        in: ["father", "mother"],
       },
+    },
+  });
+
+  if (!admin) {
+    return res.status(403).json({
+      ok: false,
+      message: "شما دسترسی به پرونده پزشکی این کودک ندارید.",
     });
+  }
+}
+
+const where = childId
+  ? { childId }
+  : { userId, childId: null };
+
+const items = await prisma.medicalRecord.findMany({
+  where,
+  orderBy: { recordDate: "desc" },
+  include: {
+    attachments: {
+      orderBy: { id: "asc" },
+    },
+  },
+});
 
     return res.json({ ok: true, items });
   } catch (err) {
@@ -42,15 +68,41 @@ exports.getMedicalRecordById = async (req, res, prisma) => {
     }
 
     const item = await prisma.medicalRecord.findFirst({
-      where: { id: recordId, userId },
-      include: {
-        attachments: { orderBy: { id: "asc" } },
-      },
-    });
+  where: { id: recordId },
+  include: {
+    attachments: { orderBy: { id: "asc" } },
+  },
+});
 
-    if (!item) {
-      return res.status(404).json({ ok: false, message: "رکورد یافت نشد." });
-    }
+if (!item) {
+  return res.status(404).json({ ok: false, message: "رکورد یافت نشد." });
+}
+
+if (item.childId) {
+  const admin = await prisma.childAdmin.findFirst({
+    where: {
+      childId: item.childId,
+      userId,
+      status: "CONNECTED",
+      role: {
+        in: ["father", "mother"],
+      },
+    },
+  });
+
+  if (!admin) {
+    return res.status(403).json({
+      ok: false,
+      message: "شما اجازه مشاهده این پرونده پزشکی کودک را ندارید.",
+    });
+  }
+} else if (item.userId !== userId) {
+  return res.status(403).json({
+    ok: false,
+    message: "شما اجازه مشاهده این پرونده پزشکی را ندارید.",
+  });
+}
+
 
     return res.json({ ok: true, item });
   } catch (err) {
@@ -68,7 +120,14 @@ exports.createMedicalRecord = async (req, res, prisma) => {
       return res.status(401).json({ ok: false, message: "دسترسی غیرمجاز." });
     }
 
-    const { title, doctor, category, recordDate, description } = req.body;
+    const {
+  title,
+  doctor,
+  category,
+  recordDate,
+  description,
+  childId,
+} = req.body;
 
     if (!title || !category || !recordDate) {
       return res.status(400).json({
@@ -77,9 +136,32 @@ exports.createMedicalRecord = async (req, res, prisma) => {
       });
     }
 
+    const numericChildId = childId ? Number(childId) : null;
+
+if (numericChildId) {
+  const admin = await prisma.childAdmin.findFirst({
+    where: {
+      childId: numericChildId,
+      userId,
+      status: "CONNECTED",
+      role: {
+        in: ["father", "mother"],
+      },
+    },
+  });
+
+  if (!admin) {
+    return res.status(403).json({
+      ok: false,
+      message: "شما اجازه ثبت پرونده پزشکی برای این کودک را ندارید.",
+    });
+  }
+}
+
     const newRecord = await prisma.medicalRecord.create({
       data: {
         userId,
+        childId: numericChildId,
         title,
         doctor,
         category,
@@ -129,13 +211,43 @@ exports.updateMedicalRecord = async (req, res, prisma) => {
 
     // چک مالکیت
     const existing = await prisma.medicalRecord.findFirst({
-      where: { id: recordId, userId },
-      select: { id: true },
-    });
+  where: { id: recordId },
+  select: {
+    id: true,
+    userId: true,
+    childId: true,
+  },
+});
 
-    if (!existing) {
-      return res.status(404).json({ ok: false, message: "رکورد یافت نشد." });
-    }
+if (!existing) {
+  return res.status(404).json({ ok: false, message: "رکورد یافت نشد." });
+}
+
+if (existing.childId) {
+  const admin = await prisma.childAdmin.findFirst({
+    where: {
+      childId: existing.childId,
+      userId,
+      status: "CONNECTED",
+      role: {
+        in: ["father", "mother"],
+      },
+    },
+  });
+
+  if (!admin) {
+    return res.status(403).json({
+      ok: false,
+      message: "شما اجازه ویرایش این پرونده پزشکی کودک را ندارید.",
+    });
+  }
+} else if (existing.userId !== userId) {
+  return res.status(403).json({
+    ok: false,
+    message: "شما اجازه ویرایش این پرونده پزشکی را ندارید.",
+  });
+}
+
 
     // آماده‌سازی دیتا (فقط فیلدهایی که ارسال شده‌اند)
     const data = {};
@@ -188,19 +300,46 @@ exports.deleteMedicalRecord = async (req, res, prisma) => {
     }
 
     // بررسی اینکه رکورد متعلق به همین کاربر باشد
-    const existing = await prisma.medicalRecord.findFirst({
-      where: {
-        id: recordId,
-        userId: userId,
-      },
-    });
+   const existing = await prisma.medicalRecord.findFirst({
+  where: { id: recordId },
+  select: {
+    id: true,
+    userId: true,
+    childId: true,
+  },
+});
 
-    if (!existing) {
-      return res.status(404).json({
-        ok: false,
-        message: "رکورد یافت نشد.",
-      });
-    }
+if (!existing) {
+  return res.status(404).json({
+    ok: false,
+    message: "رکورد یافت نشد.",
+  });
+}
+
+if (existing.childId) {
+  const admin = await prisma.childAdmin.findFirst({
+    where: {
+      childId: existing.childId,
+      userId,
+      status: "CONNECTED",
+      role: {
+        in: ["father", "mother"],
+      },
+    },
+  });
+
+  if (!admin) {
+    return res.status(403).json({
+      ok: false,
+      message: "شما اجازه حذف این پرونده پزشکی کودک را ندارید.",
+    });
+  }
+} else if (existing.userId !== userId) {
+  return res.status(403).json({
+    ok: false,
+    message: "شما اجازه حذف این پرونده پزشکی را ندارید.",
+  });
+}
 
     await prisma.medicalRecord.delete({
       where: { id: recordId },

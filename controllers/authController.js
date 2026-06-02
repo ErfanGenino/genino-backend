@@ -2,6 +2,7 @@
 
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev-genino-secret";
 
@@ -15,6 +16,10 @@ function generateToken(user) {
     JWT_SECRET,
     { expiresIn: "7d" }
   );
+}
+
+function generateRefreshToken() {
+  return crypto.randomBytes(64).toString("hex");
 }
 
 // تبدیل تاریخ شمسی فارسی به تاریخ میلادی ISO
@@ -96,10 +101,24 @@ exports.register = async (req, res, prisma) => {
 
     const token = generateToken(user);
 
+const refreshToken = generateRefreshToken();
+
+const refreshExpiresAt = new Date();
+refreshExpiresAt.setDate(refreshExpiresAt.getDate() + 90);
+
+await prisma.refreshToken.create({
+  data: {
+    userId: user.id,
+    token: refreshToken,
+    expiresAt: refreshExpiresAt,
+  },
+});
+
     return res.status(201).json({
       ok: true,
       message: "ثبت‌نام با موفقیت انجام شد.",
       token,
+      refreshToken,
       user: {
         id: user.id,
         email: user.email,
@@ -163,10 +182,24 @@ exports.login = async (req, res, prisma) => {
 
     const token = generateToken(user);
 
+const refreshToken = generateRefreshToken();
+
+const refreshExpiresAt = new Date();
+refreshExpiresAt.setDate(refreshExpiresAt.getDate() + 90);
+
+await prisma.refreshToken.create({
+  data: {
+    userId: user.id,
+    token: refreshToken,
+    expiresAt: refreshExpiresAt,
+  },
+});
+
     return res.json({
       ok: true,
       message: "ورود موفقیت‌آمیز.",
       token,
+      refreshToken,
       user: {
         id: user.id,
         email: user.email,
@@ -180,6 +213,112 @@ exports.login = async (req, res, prisma) => {
     return res.status(500).json({
       ok: false,
       message: err.message,
+    });
+  }
+};
+
+// 📌 LOGOUT
+exports.logout = async (req, res, prisma) => {
+  try {
+    const { refreshToken } = req.body;
+
+    if (refreshToken) {
+      await prisma.refreshToken.updateMany({
+        where: {
+          token: refreshToken,
+          revokedAt: null,
+        },
+        data: {
+          revokedAt: new Date(),
+        },
+      });
+    }
+
+    return res.json({
+      ok: true,
+      message: "خروج با موفقیت انجام شد.",
+    });
+  } catch (err) {
+    console.error("Logout error:", err);
+
+    return res.status(500).json({
+      ok: false,
+      message: "خطای داخلی سرور.",
+    });
+  }
+};
+
+// 📌 REFRESH TOKEN
+exports.refreshToken = async (req, res, prisma) => {
+  try {
+    const { refreshToken } = req.body;
+
+    if (!refreshToken) {
+      return res.status(400).json({
+        ok: false,
+        message: "رفرش توکن ارسال نشده است.",
+      });
+    }
+
+    const storedToken = await prisma.refreshToken.findUnique({
+      where: { token: refreshToken },
+      include: { user: true },
+    });
+
+    if (!storedToken || storedToken.revokedAt) {
+      return res.status(401).json({
+        ok: false,
+        message: "نشست شما معتبر نیست. لطفاً دوباره وارد شوید.",
+      });
+    }
+
+    if (storedToken.expiresAt < new Date()) {
+      return res.status(401).json({
+        ok: false,
+        message: "از آخرین ورود شما مدت زیادی گذشته است. لطفاً دوباره وارد شوید.",
+      });
+    }
+
+    const newAccessToken = generateToken(storedToken.user);
+
+const newRefreshToken = generateRefreshToken();
+
+const newRefreshExpiresAt = new Date();
+newRefreshExpiresAt.setDate(newRefreshExpiresAt.getDate() + 90);
+
+// باطل کردن refresh token قبلی
+await prisma.refreshToken.update({
+  where: { id: storedToken.id },
+  data: {
+    revokedAt: new Date(),
+  },
+});
+
+// ساخت refresh token جدید
+await prisma.refreshToken.create({
+  data: {
+    userId: storedToken.user.id,
+    token: newRefreshToken,
+    expiresAt: newRefreshExpiresAt,
+  },
+});
+
+return res.json({
+  ok: true,
+  token: newAccessToken,
+  refreshToken: newRefreshToken,
+      user: {
+        id: storedToken.user.id,
+        email: storedToken.user.email,
+        fullName: storedToken.user.fullName,
+        lifeStage: storedToken.user.lifeStage,
+      },
+    });
+  } catch (err) {
+    console.error("Refresh token error:", err);
+    return res.status(500).json({
+      ok: false,
+      message: "خطای داخلی سرور.",
     });
   }
 };

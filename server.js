@@ -15,6 +15,12 @@ const { createServer } = require("http");
 const { Server } = require("socket.io");
 const { deactivateInactiveChatRooms, deleteExpiredRoomMessages } = require("./controllers/chatRoomController");
 const { deleteExpiredPrivateMessages } = require("./controllers/chatController");
+const {
+  createRelationshipCareReminders,
+} = require("./jobs/relationshipCareReminderJob");
+const {
+  createLifeEventReminders,
+} = require("./jobs/lifeEventReminderJob");
 
 
 const app = express();
@@ -141,6 +147,15 @@ app.use("/api/chat-rooms", chatRoomsRoutes(prisma));
 const memoryAlbumsRoutes = require("./routes/memoryAlbums");
 app.use("/api/memory-albums", memoryAlbumsRoutes(prisma));
 
+const articlesRoutes = require("./routes/articles");
+app.use("/api/articles", articlesRoutes(prisma));
+
+const lifeCompanionRoutes = require("./routes/lifeCompanion");
+app.use("/api/life-companion", lifeCompanionRoutes(prisma));
+
+const relationshipAssessmentsRoutes = require("./routes/relationshipAssessments");
+app.use("/api/relationship-assessments", relationshipAssessmentsRoutes(prisma));
+
 
 // --- Uploads Routes ---
 const uploadsRoutes = require("./routes/uploads");
@@ -214,6 +229,16 @@ const runExpiredPrivateMessagesCleanup = async () => {
 runInactiveChatRoomsCleanup();
 runExpiredRoomMessagesCleanup();
 runExpiredPrivateMessagesCleanup();
+createRelationshipCareReminders(prisma);
+setInterval(() => {
+  createRelationshipCareReminders(prisma);
+}, 24 * 60 * 60 * 1000); // هر 24 ساعت
+
+createLifeEventReminders(prisma);
+
+setInterval(() => {
+  createLifeEventReminders(prisma);
+}, 60 * 1000);
 
 setInterval(runInactiveChatRoomsCleanup, 6 * 60 * 60 * 1000); // هر 6 ساعت
 setInterval(runExpiredRoomMessagesCleanup, 6 * 60 * 60 * 1000); // هر 6 ساعت

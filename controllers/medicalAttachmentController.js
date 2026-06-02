@@ -14,16 +14,45 @@ exports.addMedicalAttachment = async (req, res, prisma) => {
 
     // ✅ چک مالکیت رکورد
     const rec = await prisma.medicalRecord.findFirst({
-      where: { id: recordId, userId },
-      select: { id: true },
-    });
+  where: { id: recordId },
+  select: {
+    id: true,
+    userId: true,
+    childId: true,
+  },
+});
 
-    if (!rec) {
-      return res.status(404).json({
-        ok: false,
-        message: "رکورد پزشکی یافت نشد یا متعلق به شما نیست.",
-      });
-    }
+if (!rec) {
+  return res.status(404).json({
+    ok: false,
+    message: "رکورد پزشکی یافت نشد.",
+  });
+}
+
+if (rec.childId) {
+  const admin = await prisma.childAdmin.findFirst({
+    where: {
+      childId: rec.childId,
+      userId,
+      status: "CONNECTED",
+      role: {
+        in: ["father", "mother"],
+      },
+    },
+  });
+
+  if (!admin) {
+    return res.status(403).json({
+      ok: false,
+      message: "شما اجازه افزودن فایل به پرونده پزشکی این کودک را ندارید.",
+    });
+  }
+} else if (rec.userId !== userId) {
+  return res.status(403).json({
+    ok: false,
+    message: "شما اجازه افزودن فایل به این پرونده پزشکی را ندارید.",
+  });
+}
 
     const { fileName, mimeType, fileSize, url } = req.body || {};
 
@@ -76,16 +105,45 @@ exports.deleteMedicalAttachment = async (req, res, prisma) => {
 
     // ✅ چک مالکیت رکورد پزشکی (این رکورد باید مال همین کاربر باشد)
     const rec = await prisma.medicalRecord.findFirst({
-      where: { id: recordId, userId },
-      select: { id: true },
-    });
+  where: { id: recordId },
+  select: {
+    id: true,
+    userId: true,
+    childId: true,
+  },
+});
 
-    if (!rec) {
-      return res.status(404).json({
-        ok: false,
-        message: "رکورد پزشکی یافت نشد یا متعلق به شما نیست.",
-      });
-    }
+if (!rec) {
+  return res.status(404).json({
+    ok: false,
+    message: "رکورد پزشکی یافت نشد.",
+  });
+}
+
+if (rec.childId) {
+  const admin = await prisma.childAdmin.findFirst({
+    where: {
+      childId: rec.childId,
+      userId,
+      status: "CONNECTED",
+      role: {
+        in: ["father", "mother"],
+      },
+    },
+  });
+
+  if (!admin) {
+    return res.status(403).json({
+      ok: false,
+      message: "شما اجازه حذف فایل این پرونده پزشکی کودک را ندارید.",
+    });
+  }
+} else if (rec.userId !== userId) {
+  return res.status(403).json({
+    ok: false,
+    message: "شما اجازه حذف فایل این پرونده پزشکی را ندارید.",
+  });
+}
 
     // ✅ چک اینکه پیوست واقعاً متعلق به همین رکورد باشد
     const att = await prisma.medicalAttachment.findFirst({

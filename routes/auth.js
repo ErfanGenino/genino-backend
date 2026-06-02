@@ -4,6 +4,8 @@ const express = require("express");
 const {
   register,
   login,
+  logout,
+  refreshToken,
   getProfile,
   updateLifeStage,
   updateProfile,
@@ -16,6 +18,8 @@ module.exports = function (prisma) {
 
   router.post("/register", (req, res) => register(req, res, prisma));
   router.post("/login", (req, res) => login(req, res, prisma));
+  router.post("/logout", (req, res) => logout(req, res, prisma));
+  router.post("/refresh-token", (req, res) => refreshToken(req, res, prisma));
   router.get("/profile", authMiddleware, (req, res) => getProfile(req, res, prisma));
 
   // ⭐ مسیر جدید برای آپدیت مرحله زندگی
