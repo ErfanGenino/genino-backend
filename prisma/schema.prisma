@@ -67,6 +67,7 @@ model User {
   relationshipAssessments      RelationshipAssessment[]
   shoppingListsCreated         ShoppingList[]            @relation("ShoppingListCreator")
   lifeEventsCreated            LifeEvent[]               @relation("LifeEventCreator")
+  ambassador                   Ambassador?
 }
 
 model Child {
@@ -867,5 +868,55 @@ model LifeEvent {
   @@index([creatorId])
   @@index([eventDate])
   @@index([completed])
+  @@index([createdAt])
+}
+
+model Ambassador {
+  id Int @id @default(autoincrement())
+
+  userId Int @unique
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  ambassadorCode String @unique
+
+  fatherName String?
+  birthCertificateNumber String?
+  education String?
+  maritalStatus String?
+  childrenCount Int?
+  currentJob String?
+
+  phone String?
+  address String?
+  postalCode String?
+
+  familiarWithGenino String?
+  marketingExperience String?
+  dailyVisitAbility String?
+  successReason String?
+
+  personalPhotoUrl String?
+  nationalCardImageUrl String?
+  birthCertificateImageUrl String?
+
+  status String @default("ACTIVE")
+  level  String @default("NEW")
+
+  score Float @default(0)
+  customersCount Int @default(0)
+  invitedUsersCount Int @default(0)
+
+  totalCommission Int @default(0)
+  paidCommission Int @default(0)
+  payableCommission Int @default(0)
+
+  warningCount Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ambassadorCode])
+  @@index([status])
+  @@index([level])
   @@index([createdAt])
 }

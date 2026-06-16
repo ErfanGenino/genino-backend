@@ -178,6 +178,18 @@ function validateFileSize(fileSize, maxBytes = 10 * 1024 * 1024) {
   return n > 0 && n <= maxBytes;
 }
 
+function sanitizeAmbassadorDocumentExt(ext) {
+  const cleaned = String(ext || "").toLowerCase().replace(".", "").trim();
+  const allowed = ["jpg", "jpeg", "png", "webp"];
+  return allowed.includes(cleaned) ? cleaned : null;
+}
+
+function sanitizeAmbassadorDocumentContentType(ct) {
+  const v = String(ct || "").toLowerCase().trim();
+  const allowed = ["image/jpeg", "image/png", "image/webp"];
+  return allowed.includes(v) ? v : null;
+}
+
 /**
  * POST /api/uploads/presign/medical-attachment
  * body: { recordId, ext, contentType, fileName?, fileSize? }
@@ -584,6 +596,97 @@ if (!isParent) {
     return res.status(500).json({
       ok: false,
       message: "خطای سرور در presign عکس آلبوم خاطرات.",
+    });
+  }
+};
+
+exports.createPresignedAmbassadorDocumentUpload = async (req, res) => {
+  try {
+    const bucket = process.env.S3_BUCKET;
+
+    if (!bucket) {
+      return res.status(500).json({
+        ok: false,
+        message: "S3_BUCKET تنظیم نشده است.",
+      });
+    }
+
+    const userId = req.user?.userId || req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({
+        ok: false,
+        message: "دسترسی غیرمجاز.",
+      });
+    }
+
+    const { documentType, ext, contentType, fileName, fileSize } = req.body || {};
+
+    const allowedDocumentTypes = [
+      "personalPhoto",
+      "nationalCardImage",
+      "birthCertificateImage",
+    ];
+
+    if (!allowedDocumentTypes.includes(documentType)) {
+      return res.status(400).json({
+        ok: false,
+        message: "نوع مدرک سفیر نامعتبر است.",
+      });
+    }
+
+    const safeExt = sanitizeAmbassadorDocumentExt(ext);
+    const safeCT = sanitizeAmbassadorDocumentContentType(contentType);
+
+    if (!safeExt || !safeCT) {
+      return res.status(400).json({
+        ok: false,
+        message: "فرمت تصویر مجاز نیست. فقط jpg / png / webp",
+      });
+    }
+
+    if (fileSize !== undefined && !validateFileSize(fileSize, 8 * 1024 * 1024)) {
+      return res.status(400).json({
+        ok: false,
+        message: "حجم تصویر بیش از حد مجاز است. حداکثر ۸ مگابایت.",
+      });
+    }
+
+    const now = new Date();
+    const yyyy = String(now.getFullYear());
+    const mm = String(now.getMonth() + 1).padStart(2, "0");
+
+    const key = `ambassadors/${userId}/documents/${documentType}/${yyyy}/${mm}/${randomId(
+      12
+    )}.${safeExt}`;
+
+    const command = new PutObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      ContentType: safeCT,
+      Metadata: {
+        userId: String(userId),
+        documentType: String(documentType),
+        originalName: fileName ? String(fileName).slice(0, 200) : "",
+      },
+    });
+
+    const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 600 });
+    const publicUrl = `${process.env.S3_ENDPOINT}/${bucket}/${key}`;
+
+    return res.json({
+      ok: true,
+      uploadUrl,
+      key,
+      publicUrl,
+      expiresIn: 120,
+    });
+  } catch (err) {
+    console.error("PRESIGN AMBASSADOR DOCUMENT ERROR:", err);
+
+    return res.status(500).json({
+      ok: false,
+      message: "خطای سرور در presign مدارک سفیر.",
     });
   }
 };

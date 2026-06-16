@@ -140,6 +140,9 @@ app.use("/api/chat", chatRoutes(prisma));
 const usersRoutes = require("./routes/users");
 app.use("/api/users", usersRoutes(prisma));
 
+const ambassadorsRoutes = require("./routes/ambassadors");
+app.use("/api/ambassadors", ambassadorsRoutes(prisma));
+
 const chatRoomsRoutes = require("./routes/chatRooms");
 app.use("/api/chat-rooms", chatRoomsRoutes(prisma));
 
