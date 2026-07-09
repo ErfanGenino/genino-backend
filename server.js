@@ -67,6 +67,8 @@ app.options("*", cors(corsOptions));
 
 // Body parser
 app.use(express.json());
+app.use(express.urlencoded({ extended: true })); // 👈 اینو اضافه کن
+app.use("/uploads", express.static("uploads"));
 
 // --- Health Check ---
 app.get("/api/health", (req, res) => {
@@ -89,6 +91,10 @@ app.post("/api/test", (req, res) => {
 // --- Auth Routes ---
 const authRoutes = require("./routes/auth");
 app.use("/api/auth", authRoutes(prisma));
+
+// --- Admin Auth Routes ---
+const adminAuthRoutes = require("./routes/adminAuth");
+app.use("/api/admin-auth", adminAuthRoutes(prisma));
 
 // --- Children Routes ---
 const childrenRoutes = require("./routes/children");
@@ -143,6 +149,28 @@ app.use("/api/users", usersRoutes(prisma));
 const ambassadorsRoutes = require("./routes/ambassadors");
 app.use("/api/ambassadors", ambassadorsRoutes(prisma));
 
+const vendorsRoutes = require("./routes/vendors");
+app.use("/api/vendors", vendorsRoutes(prisma));
+
+const vendorDocumentsRoutes = require("./routes/vendorDocuments");
+app.use("/api/vendor-documents", vendorDocumentsRoutes(prisma));
+
+const adminVendorPackagesRoutes = require("./routes/adminVendorPackages");
+app.use("/api/admin/vendor-packages", adminVendorPackagesRoutes(prisma));
+app.use("/api/vendor-packages", adminVendorPackagesRoutes(prisma));
+
+const adminDiscountCodesRoutes = require("./routes/adminDiscountCodes");
+app.use("/api/admin/discount-codes", adminDiscountCodesRoutes(prisma));
+
+const adminFinanceSettingsRoutes = require("./routes/adminFinanceSettings");
+app.use("/api/admin/finance-settings", adminFinanceSettingsRoutes(prisma));
+
+const adminVendorsRoutes = require("./routes/adminVendors");
+app.use("/api/admin/vendors", adminVendorsRoutes(prisma));
+
+const discountCodesRoutes = require("./routes/discountCodes");
+app.use("/api/discount-codes", discountCodesRoutes(prisma));
+
 const chatRoomsRoutes = require("./routes/chatRooms");
 app.use("/api/chat-rooms", chatRoomsRoutes(prisma));
 
@@ -158,6 +186,15 @@ app.use("/api/life-companion", lifeCompanionRoutes(prisma));
 
 const relationshipAssessmentsRoutes = require("./routes/relationshipAssessments");
 app.use("/api/relationship-assessments", relationshipAssessmentsRoutes(prisma));
+
+const vendorProductsRoutes = require("./routes/vendorProductRoutes");
+app.use("/api/vendor-products", vendorProductsRoutes(prisma));
+
+const vendorNotificationsRoutes = require("./routes/vendorNotificationRoutes");
+app.use("/api/vendor-notifications",vendorNotificationsRoutes(prisma));
+
+const vendorShopHeaderRoutes = require("./routes/vendorShopHeaderRoutes");
+app.use("/api/vendor-shop-header", vendorShopHeaderRoutes(prisma));
 
 
 // --- Uploads Routes ---

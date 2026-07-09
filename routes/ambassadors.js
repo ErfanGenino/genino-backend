@@ -83,20 +83,45 @@ module.exports = (prisma) => {
       const ambassador = await prisma.ambassador.findUnique({
   where: { userId: req.user.id || req.user.userId },
   include: {
-    user: {
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        fullName: true,
-        phone: true,
-        email: true,
-        province: true,
-        city: true,
-        avatarUrl: true,
+  user: {
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      fullName: true,
+      phone: true,
+      email: true,
+      province: true,
+      city: true,
+      avatarUrl: true,
+    },
+  },
+
+  vendorRelations: {
+    orderBy: {
+      createdAt: "desc",
+    },
+    include: {
+      vendor: {
+        select: {
+          id: true,
+          businessName: true,
+          personType: true,
+          activityType: true,
+          mainActivityField: true,
+          province: true,
+          city: true,
+          phone: true,
+          email: true,
+          accountStatus: true,
+          paymentStatus: true,
+          packageStatus: true,
+          createdAt: true,
+        },
       },
     },
   },
+},
 });
 
       return res.json({
@@ -112,6 +137,128 @@ module.exports = (prisma) => {
       });
     }
   });
+
+  router.post("/validate-code", async (req, res) => {
+  try {
+    const { code, vendorId } = req.body;
+
+    if (!code) {
+      return res.status(400).json({
+        ok: false,
+        message: "کد سفیر الزامی است.",
+      });
+    }
+
+    const ambassador = await prisma.ambassador.findUnique({
+      where: {
+        ambassadorCode: code.trim().toUpperCase(),
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            fullName: true,
+            phone: true,
+            province: true,
+            city: true,
+            avatarUrl: true,
+          },
+        },
+      },
+    });
+
+    if (!ambassador || ambassador.status !== "ACTIVE") {
+      return res.status(404).json({
+        ok: false,
+        message: "کد سفیر معتبر نیست یا سفیر فعال نمی‌باشد.",
+      });
+    }
+
+    if (vendorId) {
+  const activeRelation = await prisma.ambassadorVendor.findFirst({
+    where: {
+      vendorId: Number(vendorId),
+      status: "ACTIVE",
+    },
+  });
+
+  if (activeRelation && activeRelation.ambassadorId !== ambassador.id) {
+    return res.status(400).json({
+      ok: false,
+      message:
+        "این کسب‌وکار پیش‌تر از طریق سفیر دیگری به ژنینو معرفی شده است. با هدف حفظ حقوق و تلاش سفیران ژنینو، امکان استفاده از کد سفیر دیگر برای این فروشنده وجود ندارد.",
+    });
+  }
+}
+
+    return res.json({
+      ok: true,
+      ambassador: {
+  id: ambassador.id,
+  code: ambassador.ambassadorCode,
+  name:
+    ambassador.user?.fullName ||
+    `${ambassador.user?.firstName || ""} ${ambassador.user?.lastName || ""}`.trim() ||
+    "سفیر ژنینو",
+  phone: ambassador.user?.phone || ambassador.phone || "",
+  city: ambassador.user?.city || "",
+  province: ambassador.user?.province || "",
+  avatarUrl: ambassador.user?.avatarUrl || null,
+},
+    });
+  } catch (error) {
+    console.error("AMBASSADOR_VALIDATE_CODE_ERROR:", error);
+
+    return res.status(500).json({
+      ok: false,
+      message: "خطا در بررسی کد سفیر.",
+    });
+  }
+});
+
+router.get("/admin/list", async (req, res) => {
+  try {
+    const ambassadors = await prisma.ambassador.findMany({
+      include: {
+        user: {
+          select: {
+            firstName: true,
+            lastName: true,
+            nationalCode: true,
+            city: true,
+            phone: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    return res.json({
+      ok: true,
+      ambassadors: ambassadors.map((item) => ({
+        id: item.id,
+        code: item.ambassadorCode,
+        firstName: item.user?.firstName || "",
+        lastName: item.user?.lastName || "",
+        nationalCode: item.user?.nationalCode || "",
+        city: item.user?.city || "",
+        mobile: item.user?.phone || "",
+      })),
+    });
+  } catch (error) {
+    console.error("ADMIN_AMBASSADORS_LIST_ERROR:", error);
+
+    return res.status(500).json({
+      ok: false,
+      message: "خطا در دریافت لیست سفیران",
+    });
+  }
+});
+
 
   return router;
 };

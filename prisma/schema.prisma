@@ -68,6 +68,7 @@ model User {
   shoppingListsCreated         ShoppingList[]            @relation("ShoppingListCreator")
   lifeEventsCreated            LifeEvent[]               @relation("LifeEventCreator")
   ambassador                   Ambassador?
+  productReviews               ProductReview[]
 }
 
 model Child {
@@ -252,6 +253,29 @@ model Notification {
   @@index([type])
 }
 
+model VendorNotification {
+  id Int @id @default(autoincrement())
+
+  vendorId Int
+  vendor VendorAccount @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  type String
+
+  title String
+  body String?
+
+  data Json?
+
+  read Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([vendorId])
+  @@index([vendorId, read])
+  @@index([createdAt])
+  @@index([type])
+}
+
 model UserAddress {
   id         Int      @id @default(autoincrement())
   userId     Int
@@ -374,8 +398,8 @@ model MedicalRecord {
   updatedAt   DateTime            @updatedAt
   attachments MedicalAttachment[]
 
-  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  child       Child?              @relation(fields: [childId], references: [id], onDelete: Cascade)
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  child Child? @relation(fields: [childId], references: [id], onDelete: Cascade)
 
   @@index([userId, recordDate])
   @@index([userId, category])
@@ -862,7 +886,7 @@ model LifeEvent {
   lifeCompanion LifeCompanion @relation(fields: [lifeCompanionId], references: [id], onDelete: Cascade)
   creator       User          @relation("LifeEventCreator", fields: [creatorId], references: [id])
 
-  reminderSent  Boolean @default(false)
+  reminderSent Boolean @default(false)
 
   @@index([lifeCompanionId])
   @@index([creatorId])
@@ -874,40 +898,40 @@ model LifeEvent {
 model Ambassador {
   id Int @id @default(autoincrement())
 
-  userId Int @unique
+  userId Int  @unique
   user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   ambassadorCode String @unique
 
-  fatherName String?
+  fatherName             String?
   birthCertificateNumber String?
-  education String?
-  maritalStatus String?
-  childrenCount Int?
-  currentJob String?
+  education              String?
+  maritalStatus          String?
+  childrenCount          Int?
+  currentJob             String?
 
-  phone String?
-  address String?
+  phone      String?
+  address    String?
   postalCode String?
 
-  familiarWithGenino String?
+  familiarWithGenino  String?
   marketingExperience String?
-  dailyVisitAbility String?
-  successReason String?
+  dailyVisitAbility   String?
+  successReason       String?
 
-  personalPhotoUrl String?
-  nationalCardImageUrl String?
+  personalPhotoUrl         String?
+  nationalCardImageUrl     String?
   birthCertificateImageUrl String?
 
   status String @default("ACTIVE")
   level  String @default("NEW")
 
-  score Float @default(0)
-  customersCount Int @default(0)
-  invitedUsersCount Int @default(0)
+  score             Float @default(0)
+  customersCount    Int   @default(0)
+  invitedUsersCount Int   @default(0)
 
-  totalCommission Int @default(0)
-  paidCommission Int @default(0)
+  totalCommission   Int @default(0)
+  paidCommission    Int @default(0)
   payableCommission Int @default(0)
 
   warningCount Int @default(0)
@@ -915,8 +939,480 @@ model Ambassador {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  vendorRelations AmbassadorVendor[]
+
   @@index([ambassadorCode])
   @@index([status])
   @@index([level])
   @@index([createdAt])
+}
+
+model VendorAccount {
+  id Int @id @default(autoincrement())
+
+  // نوع ثبت‌نام
+  personType   String // real | legal
+  activityType String // product | service | both
+
+  // زمینه فعالیت
+  mainActivityField   String
+  extraActivityFields Json?
+
+  // اطلاعات شخص حقیقی
+  firstName    String?
+  lastName     String?
+  nationalCode String?
+  birthDate    DateTime?
+
+  // اطلاعات شخص حقوقی
+  legalCompanyName   String?
+  companyType        String?
+  managerName        String?
+  registrationNumber String?
+  registrationDate   DateTime?
+  nationalId         String?
+  economicCode       String?
+
+  // اطلاعات کسب‌وکار
+  businessName       String
+  shopHeaderImages   Json?
+
+  // اطلاعات ورود فروشنده
+  email    String @unique
+  phone    String @unique
+  password String
+
+  // موقعیت فعالیت
+  province String?
+  city     String?
+
+  // اطلاعات حساب بانکی و تسویه
+  bankName String?
+
+  accountNumber String?
+
+  cardNumber String?
+
+  shebaNumber String?
+
+  bankInfoConfirmed Boolean @default(false)
+
+  bankInfoConfirmedAt DateTime?
+
+  contractAccepted Boolean @default(false)
+
+  contractAcceptedAt DateTime?
+
+  // چرخه اصلی حساب فروشنده
+  accountStatus String @default("REGISTERED")
+  // REGISTERED
+  // PACKAGE_SELECTED
+  // PAID
+  // CONTRACT_AND_DOCUMENTS_SUBMITTED
+  // UNDER_REVIEW
+  // NEEDS_CORRECTION
+  // APPROVED
+  // REJECTED
+  // ACTIVE
+  // SUSPENDED
+
+  // وضعیت انتشار در ژنینو
+  publishStatus String @default("NOT_ALLOWED")
+  // NOT_ALLOWED
+  // ALLOWED
+
+  // وضعیت بسته، پرداخت، مدارک و بررسی
+  packageStatus String @default("NOT_SELECTED")
+  // NOT_SELECTED
+  // SELECTED
+
+  paymentStatus String @default("UNPAID")
+  // UNPAID
+  // PAID
+  // REFUNDED
+  // FAILED
+
+  selectedPackageId         Int?
+  selectedPackagePrice      Int?
+  selectedPackageFinalPrice Int?
+  selectedPackageTitle      String?
+
+  selectedDiscountCode    String?
+  selectedDiscountPercent Int?
+
+  selectedAmbassadorCode           String?
+  selectedAmbassadorName           String?
+  selectedAmbassadorPhone          String?
+  selectedAmbassadorDiscountAmount Int?
+
+  documentsStatus String @default("NOT_SUBMITTED")
+  // NOT_SUBMITTED
+  // SUBMITTED
+  // APPROVED
+  // REJECTED
+
+  reviewStatus String @default("NOT_STARTED")
+  // NOT_STARTED
+  // UNDER_REVIEW
+  // NEEDS_CORRECTION
+  // APPROVED
+  // REJECTED
+
+  // تاریخ‌های مهم چرخه فروشنده
+  packageSelectedAt    DateTime?
+  paidAt               DateTime?
+  documentsSubmittedAt DateTime?
+  reviewStartedAt      DateTime?
+  approvedAt           DateTime?
+  rejectedAt           DateTime?
+
+  // اشتراک فروشنده از زمان تأیید ژنینو شروع می‌شود
+  subscriptionStartsAt DateTime?
+  subscriptionEndsAt   DateTime?
+
+  // توضیح رد یا تعلیق، برای پنل ادمین و پیام به فروشنده
+  rejectionReason  String?
+  suspensionReason String?
+  correctionReason String?
+  correctionFields String[] @default([])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ambassadorRelations AmbassadorVendor[]
+  usedDiscountCodes   DiscountCode[]
+  documents           VendorDocument[]
+  reviewHistories     VendorReviewHistory[]
+  vendorProducts      VendorProduct[]
+  notifications       VendorNotification[]
+
+  usedProductCount Int @default(0)
+
+  @@index([accountStatus])
+  @@index([publishStatus])
+  @@index([packageStatus])
+  @@index([paymentStatus])
+  @@index([documentsStatus])
+  @@index([reviewStatus])
+  @@index([activityType])
+  @@index([mainActivityField])
+  @@index([province])
+  @@index([city])
+  @@index([createdAt])
+
+}
+
+enum VendorReviewAction {
+  SUBMITTED
+  CORRECTION_REQUESTED
+  APPROVED
+  REJECTED
+}
+
+enum VendorDocumentType {
+  NATIONAL_CARD
+  SELFIE_WITH_NATIONAL_CARD
+  BANK_DOCUMENT
+  BUSINESS_LICENSE
+  COMPANY_OFFICIAL_NEWSPAPER
+  COMPANY_REGISTRATION
+  REPRESENTATIVE_LETTER
+  OTHER
+}
+
+model VendorDocument {
+  id Int @id @default(autoincrement())
+
+  vendorId Int
+  vendor   VendorAccount @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  type VendorDocumentType
+
+  fileName String
+  mimeType String
+  fileSize Int?
+  url      String
+
+  status String @default("PENDING")
+  // PENDING
+  // APPROVED
+  // REJECTED
+
+  adminNote String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([vendorId])
+  @@index([type])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model VendorReviewHistory {
+  id Int @id @default(autoincrement())
+
+  vendorId Int
+  vendor   VendorAccount @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  adminId Int?
+
+  admin AdminUser? @relation(fields: [adminId], references: [id], onDelete: SetNull)
+
+  action VendorReviewAction
+
+  message String?
+
+  correctionFields String[] @default([])
+
+  snapshot Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([vendorId])
+  @@index([adminId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+model AdminUser {
+  id Int @id @default(autoincrement())
+
+  username String @unique
+  password String
+
+  fullName String
+  phone    String?
+  email    String?
+
+  isSuperAdmin Boolean @default(false)
+  isActive     Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  permissions           AdminUserPermission[]
+  vendorReviewHistories VendorReviewHistory[]
+
+  @@index([username])
+  @@index([isActive])
+  @@index([isSuperAdmin])
+}
+
+model AdminPermission {
+  id Int @id @default(autoincrement())
+
+  code        String  @unique
+  title       String
+  description String?
+
+  createdAt DateTime @default(now())
+
+  users AdminUserPermission[]
+
+  @@index([code])
+}
+
+model AdminUserPermission {
+  id Int @id @default(autoincrement())
+
+  adminUserId  Int
+  permissionId Int
+
+  adminUser  AdminUser       @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+  permission AdminPermission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([adminUserId, permissionId])
+  @@index([adminUserId])
+  @@index([permissionId])
+}
+
+model VendorPackage {
+  id Int @id @default(autoincrement())
+
+  code        String  @unique
+  title       String
+  description String?
+
+  targetType String @default("BOTH")
+
+  hasDedicatedPage Boolean @default(true)
+  windowCount      Int?
+  achievementLimit Int?
+  allowedUserCount Int?
+
+  durationMonths Int
+  price          Int
+
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([code])
+  @@index([isActive])
+  @@index([sortOrder])
+}
+
+model DiscountCode {
+  id Int @id @default(autoincrement())
+
+  code    String @unique
+  percent Int
+
+  title       String?
+  description String?
+
+  isActive Boolean @default(true)
+
+  usedAt         DateTime?
+  usedByVendorId Int?
+  usedByVendor   VendorAccount? @relation(fields: [usedByVendorId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([code])
+  @@index([isActive])
+  @@index([usedByVendorId])
+  @@index([createdAt])
+}
+
+model AmbassadorVendor {
+  id Int @id @default(autoincrement())
+
+  ambassadorId Int
+  vendorId     Int
+
+  ambassador Ambassador    @relation(fields: [ambassadorId], references: [id], onDelete: Cascade)
+  vendor     VendorAccount @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  ambassadorCode String
+
+  packageId    Int?
+  packageTitle String?
+  packagePrice Int     @default(0)
+
+  ambassadorDiscountAmount Int @default(0)
+
+  subscriptionCommissionBaseAmount Int   @default(0)
+  subscriptionCommissionPercent    Float @default(0)
+  subscriptionCommissionAmount     Int   @default(0)
+
+  totalSalesAmount       Int   @default(0)
+  salesCommissionPercent Float @default(0)
+  salesCommissionAmount  Int   @default(0)
+
+  paidCommissionAmount    Int @default(0)
+  payableCommissionAmount Int @default(0)
+
+  status String @default("ACTIVE")
+  // ACTIVE
+  // EXPIRED
+  // RELEASED
+
+  subscriptionStartsAt DateTime?
+  subscriptionEndsAt   DateTime?
+  releasedAt           DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ambassadorId])
+  @@index([vendorId])
+  @@index([status])
+  @@index([subscriptionEndsAt])
+  @@index([releasedAt])
+  @@index([createdAt])
+}
+
+model FinanceSetting {
+  id Int @id @default(autoincrement())
+
+  // تخفیف ثابت سفیر برای فروشندگان
+  ambassadorVendorDiscountAmount Int @default(5000000)
+
+  // درصد پورسانت سفیر از حق اشتراک فروشنده
+  ambassadorSubscriptionCommissionPercent Int @default(50)
+
+  // درصد پورسانت سفیر از فروش فروشنده
+  ambassadorSalesCommissionPercent Float @default(1)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model VendorProduct {
+  id Int @id @default(autoincrement())
+
+  vendorId Int
+  vendor   VendorAccount @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  title       String
+  price       Int
+  description String?
+
+  brandFa  String?
+  brandEn  String?
+  material String?
+
+  mainImageIndex Int @default(0)
+
+  categoryLinks Json
+  inventoryRows Json
+
+  gender    Json
+  seasons   Json
+  ageRanges Json
+
+  madeInCountry String?
+
+  weight String?
+  length String?
+  width  String?
+  height String?
+
+  physicalDetailsNote String?
+
+  hasWarranty    String?
+  warrantyPeriod String?
+  warrantyUnit   String?
+
+  standards        Json
+  careInstructions Json
+  careNote         String?
+
+  images Json
+
+  reviews ProductReview[]
+
+  status String @default("DRAFT")
+  // DRAFT → PUBLISHED
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([vendorId])
+  @@index([status])
+}
+
+model ProductReview {
+  id        Int      @id @default(autoincrement())
+  productId Int
+  userId    Int
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  userName  String
+  rating    Int
+  text      String
+  createdAt DateTime @default(now())
+
+  product VendorProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@index([userId])
 }

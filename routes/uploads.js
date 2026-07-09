@@ -8,6 +8,8 @@ const {
   createPresignedChatVoiceUpload,
   createPresignedMemoryAlbumPhotoUpload,
   createPresignedAmbassadorDocumentUpload,
+  createPresignedVendorDocumentUpload,
+  createPresignedVendorProductImageUpload,
 } = require("../controllers/uploadController");
 
 module.exports = function () {
@@ -53,6 +55,18 @@ router.post(
   "/presign/ambassador-document",
   authMiddleware,
   createPresignedAmbassadorDocumentUpload
+);
+
+router.post(
+  "/presign/vendor-document",
+  authMiddleware,
+  createPresignedVendorDocumentUpload
+);
+
+router.post(
+  "/presign/vendor-product-image",
+  authMiddleware,
+  createPresignedVendorProductImageUpload
 );
 
   return router;

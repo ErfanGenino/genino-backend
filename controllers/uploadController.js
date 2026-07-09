@@ -190,6 +190,37 @@ function sanitizeAmbassadorDocumentContentType(ct) {
   return allowed.includes(v) ? v : null;
 }
 
+function sanitizeVendorDocumentExt(ext) {
+  const cleaned = String(ext || "").toLowerCase().replace(".", "").trim();
+
+  const allowed = [
+    "jpg",
+    "jpeg",
+    "png",
+    "webp",
+    "pdf",
+    "doc",
+    "docx",
+  ];
+
+  return allowed.includes(cleaned) ? cleaned : null;
+}
+
+function sanitizeVendorDocumentContentType(ct) {
+  const v = String(ct || "").toLowerCase().trim();
+
+  const allowed = [
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ];
+
+  return allowed.includes(v) ? v : null;
+}
+
 /**
  * POST /api/uploads/presign/medical-attachment
  * body: { recordId, ext, contentType, fileName?, fileSize? }
@@ -687,6 +718,207 @@ exports.createPresignedAmbassadorDocumentUpload = async (req, res) => {
     return res.status(500).json({
       ok: false,
       message: "خطای سرور در presign مدارک سفیر.",
+    });
+  }
+};
+
+exports.createPresignedVendorDocumentUpload = async (req, res) => {
+  try {
+    const bucket = process.env.S3_BUCKET;
+
+    if (!bucket) {
+      return res.status(500).json({
+        ok: false,
+        message: "S3_BUCKET تنظیم نشده است.",
+      });
+    }
+
+    const vendorId = Number(req.body?.vendorId);
+
+    if (!vendorId || Number.isNaN(vendorId)) {
+      return res.status(400).json({
+        ok: false,
+        message: "شناسه فروشنده نامعتبر است.",
+      });
+    }
+
+    const vendor = await req.prisma.vendorAccount.findUnique({
+  where: { id: vendorId },
+  select: { id: true },
+});
+
+if (!vendor) {
+  return res.status(404).json({
+    ok: false,
+    message: "فروشنده پیدا نشد.",
+  });
+}
+
+    const {
+      documentType,
+      ext,
+      contentType,
+      fileName,
+      fileSize,
+    } = req.body || {};
+
+    const allowedDocumentTypes = [
+      "NATIONAL_CARD",
+      "SELFIE_WITH_NATIONAL_CARD",
+      "BUSINESS_LICENSE",
+      "COMPANY_OFFICIAL_NEWSPAPER",
+      "COMPANY_REGISTRATION",
+      "REPRESENTATIVE_LETTER",
+      "OTHER",
+    ];
+
+    if (!allowedDocumentTypes.includes(documentType)) {
+      return res.status(400).json({
+        ok: false,
+        message: "نوع مدرک فروشنده نامعتبر است.",
+      });
+    }
+
+    const safeExt = sanitizeVendorDocumentExt(ext);
+    const safeCT = sanitizeVendorDocumentContentType(contentType);
+
+    if (!safeExt || !safeCT) {
+      return res.status(400).json({
+        ok: false,
+        message: "فرمت فایل مجاز نیست.",
+      });
+    }
+
+    if (
+      fileSize !== undefined &&
+      !validateFileSize(fileSize, 10 * 1024 * 1024)
+    ) {
+      return res.status(400).json({
+        ok: false,
+        message: "حجم فایل بیش از حد مجاز است.",
+      });
+    }
+
+    const now = new Date();
+    const yyyy = String(now.getFullYear());
+    const mm = String(now.getMonth() + 1).padStart(2, "0");
+
+    const key = `vendors/${vendorId}/documents/${documentType}/${yyyy}/${mm}/${randomId(
+      12
+    )}.${safeExt}`;
+
+    const command = new PutObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      ContentType: safeCT,
+      Metadata: {
+        vendorId: String(vendorId),
+        documentType: String(documentType),
+        originalName: fileName
+          ? String(fileName).slice(0, 200)
+          : "",
+      },
+    });
+
+    const uploadUrl = await getSignedUrl(s3, command, {
+      expiresIn: 600,
+    });
+
+    const publicUrl =
+      `${process.env.S3_ENDPOINT}/${bucket}/${key}`;
+
+    return res.json({
+      ok: true,
+      uploadUrl,
+      key,
+      publicUrl,
+      expiresIn: 120,
+    });
+  } catch (err) {
+    console.error(
+      "PRESIGN VENDOR DOCUMENT ERROR:",
+      err
+    );
+
+    return res.status(500).json({
+      ok: false,
+      message: "خطای سرور در presign مدارک فروشنده.",
+    });
+  }
+};
+
+
+exports.createPresignedVendorProductImageUpload = async (req, res) => {
+  try {
+    const bucket = process.env.S3_BUCKET;
+
+    if (!bucket) {
+      return res.status(500).json({
+        ok: false,
+        message: "S3_BUCKET تنظیم نشده است.",
+      });
+    }
+
+    const vendorId = req.user?.vendorId || Number(req.body?.vendorId);
+
+    if (!vendorId || Number.isNaN(Number(vendorId))) {
+      return res.status(401).json({
+        ok: false,
+        message: "فروشنده معتبر نیست. لطفاً دوباره وارد شوید.",
+      });
+    }
+
+    const { ext, contentType, fileName, fileSize } = req.body || {};
+
+    const safeExt = sanitizeExt(ext);
+    const safeCT = sanitizeContentType(contentType);
+
+    if (!safeExt || !safeCT) {
+      return res.status(400).json({
+        ok: false,
+        message: "فرمت تصویر مجاز نیست. فقط jpg / png / webp",
+      });
+    }
+
+    if (fileSize && fileSize > 8 * 1024 * 1024) {
+      return res.status(400).json({
+        ok: false,
+        message: "حجم تصویر بیش از حد مجاز است.",
+      });
+    }
+
+    const now = new Date();
+    const yyyy = String(now.getFullYear());
+    const mm = String(now.getMonth() + 1).padStart(2, "0");
+
+    const key = `vendors/${vendorId}/products/${yyyy}/${mm}/${randomId(12)}.${safeExt}`;
+
+    const command = new PutObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      ContentType: safeCT,
+      Metadata: {
+        vendorId: String(vendorId),
+        originalName: fileName ? String(fileName).slice(0, 200) : "",
+      },
+    });
+
+    const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 600 });
+    const publicUrl = `${process.env.S3_ENDPOINT}/${bucket}/${key}`;
+
+    return res.json({
+      ok: true,
+      uploadUrl,
+      key,
+      publicUrl,
+      expiresIn: 120,
+    });
+  } catch (err) {
+    console.error("PRESIGN VENDOR PRODUCT IMAGE ERROR:", err);
+
+    return res.status(500).json({
+      ok: false,
+      message: "خطای سرور در آماده‌سازی آپلود تصویر محصول.",
     });
   }
 };
